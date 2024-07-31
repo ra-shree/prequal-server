@@ -7,9 +7,9 @@ run-containers:
 ## stop: stops all demo services
 .PHONY: stop
 stop:
- docker stop server1
- docker stop server2
- docker stop server3
+	docker stop server1
+	docker stop server2
+	docker stop server3
 
 ## help: print this help message
 .PHONY: help
@@ -20,4 +20,4 @@ help:
 ## run: starts demo http services
 .PHONY: run-proxy-server
 run-proxy-server:
- go run cmd/main.go
+	go run cmd/main.go

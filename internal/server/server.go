@@ -8,7 +8,6 @@ import (
 	"github.com/ra-shree/dynamic-load-balancer/internal/configs"
 )
 
-
 func Run() error {
 	config, err := configs.NewConfiguration()
 	if err != nil {
@@ -19,9 +18,9 @@ func Run() error {
 	mux.HandleFunc("/ping", ping)
 
 	for _, resource := range config.Resources {
-		url, _ := url.Parse(resource.Destination_URL)
-		proxy := NewProxy(url)
-		mux.HandleFunc(resource.Endpoint, ProxyRequestHandler(proxy, url, resource.Endpoint))
+		destinationUrl, _ := url.Parse(resource.Destination_Url)
+		proxy := NewProxy(destinationUrl)
+		mux.HandleFunc(resource.Endpoint, ProxyRequestHandler(proxy, destinationUrl, resource.Endpoint))
 	}
 
 	if err := http.ListenAndServe(config.Server.Host+":"+config.Server.Listen_Port, mux); err != nil {

@@ -8,22 +8,22 @@ import (
 )
 
 type resource struct {
-	Name string
-	Endpoint string
-	Destination_URL string
+	Name            string
+	Endpoint        string
+	Destination_Url string
 }
 
-type configuration struct {
+type Configuration struct {
 	Server struct {
-		Host string
+		Host        string
 		Listen_Port string
 	}
 	Resources []resource
 }
 
-var Config *configuration
+var Config *Configuration
 
-func NewConfiguration() (*configuration, error) {
+func NewConfiguration() (*Configuration, error) {
 	viper.AddConfigPath("data")
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -31,11 +31,11 @@ func NewConfiguration() (*configuration, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(`.`, `_`))
 
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("Error loading config file: %s", err)
+		return nil, fmt.Errorf("error loading config file: %s", err)
 	}
 
 	if err := viper.Unmarshal(&Config); err != nil {
-		return nil, fmt.Errorf("Error reading config file: %s", err)
+		return nil, fmt.Errorf("error reading config file: %s", err)
 	}
 
 	return Config, nil
