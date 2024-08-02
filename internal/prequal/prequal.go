@@ -1,5 +1,0 @@
-package prequal
-
-func SelectServer() {
-	
-}
