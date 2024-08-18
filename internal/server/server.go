@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/ra-shree/dynamic-load-balancer/internal/configs"
+	"github.com/ra-shree/prequal-server/internal/configs"
 )
 
 func Run() error {

@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/ra-shree/dynamic-load-balancer/internal/server"
+	"github.com/ra-shree/prequal-server/internal/server"
 )
 
 func main() {

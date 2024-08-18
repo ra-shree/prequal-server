@@ -1,6 +1,6 @@
-module github.com/ra-shree/dynamic-load-balancer
+module github.com/ra-shree/prequal-server
 
-go 1.22.5
+go 1.23
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
