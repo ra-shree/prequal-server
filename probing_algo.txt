@@ -1,0 +1,16 @@
+max_probes = 16
+
+when to make probe requests to replica:
+	1. when a requests arrives at the reverse proxy
+	2. when the server has been idle for a certain time
+
+how to decide the replicas to probe:
+	1. select a number of replicas at random without replacement
+	2. the number of replicas to probe is decided by a constant r_probe which can be less than 1 (there is a specific formula) (ex. 5.7, randomly perform ceil or floor each time)
+
+how to decide which probes to discard:
+	1. allow reuse of probes a certain amount of time (decided by a constant, r_probe and a r_remove value, maximum pool size, and number of replicas) see paper for formula
+	2. when new probe arrives, and we are at max probes, we drop the oldest probe
+	3. periodically remove the worst probe from the pool
+	4. remove probes after they have remained for a certain time
+
