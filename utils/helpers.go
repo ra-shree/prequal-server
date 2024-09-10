@@ -1,11 +1,11 @@
-package reverseproxy
+package utils
 
 import (
 	"net/url"
 	"path"
 )
 
-func joinURLPath(base, u *url.URL) (joinedPath, rawJoinedPath string) {
+func JoinURLPath(base, u *url.URL) (joinedPath, rawJoinedPath string) {
 
 	joinedPath = path.Join(base.Path, u.Path)
 

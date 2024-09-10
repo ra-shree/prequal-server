@@ -6,7 +6,7 @@ import (
 	"os/signal"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/reverseproxy"
+	"github.com/ra-shree/prequal-server/pkg/reverseproxy"
 )
 
 func main() {
@@ -15,12 +15,12 @@ func main() {
 	r := mux.NewRouter()
 	r.Host("localhost").PathPrefix("/api")
 
-	proxy.AddReplica([]string{"http://localhost:8000"}, r)
+	proxy.AddReplica([]string{"http://localhost:9000"}, r)
 
 	proxy.AddReplica([]string{
-		"http://localhost:8001",
-		"http://localhost:8002",
-		"http://localhost:8003",
+		"http://localhost:9001",
+		"http://localhost:9002",
+		"http://localhost:9003",
 	}, nil)
 
 	proxy.AddReplica([]string{"http://localhost:8000"}, r)

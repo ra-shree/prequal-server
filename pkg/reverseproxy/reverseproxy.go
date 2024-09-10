@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/gorilla/mux"
+	"github.com/ra-shree/prequal-server/utils"
 )
 
 type ReverseProxy struct {
@@ -105,7 +106,7 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 
 				req.URL.Scheme = upstream.Scheme
 				req.URL.Host = upstream.Host
-				req.URL.Path, req.URL.RawPath = joinURLPath(upstream, req.URL)
+				req.URL.Path, req.URL.RawPath = utils.JoinURLPath(upstream, req.URL)
 				if targetQuery == "" || req.URL.RawQuery == "" {
 					req.URL.RawQuery = targetQuery + req.URL.RawQuery
 				} else {
