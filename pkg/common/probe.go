@@ -1,6 +1,7 @@
-package probe
+package common
 
 import (
+	"net/url"
 	"time"
 )
 
@@ -10,11 +11,12 @@ type ServerProbe struct {
 	Name             string
 	RequestsInFlight int
 	Latency          int
+	upstream         *url.URL
 }
 
 type ServerProbeItem struct {
-	used       int
-	createTime time.Time
+	used        int
+	ReceiptTime time.Time
 	ServerProbe
 }
 
@@ -30,7 +32,7 @@ func NewServerProbeItem(s *ServerProbe) *ServerProbeItem {
 	return &ServerProbeItem{
 		ServerProbe: *s,
 		used:        0,
-		createTime:  time.Now(),
+		ReceiptTime: time.Now(),
 	}
 }
 
@@ -87,7 +89,7 @@ func (q *ServerProbeQueue) RemoveOldProbes() bool {
 
 	count := 0
 	for _, probe := range q.probes {
-		if time.Since(probe.createTime) < maxLifeTime {
+		if time.Since(probe.ReceiptTime) < maxLifeTime {
 			continue
 		}
 		count++
