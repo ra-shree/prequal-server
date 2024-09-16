@@ -8,6 +8,8 @@ import (
 	"net/url"
 
 	"github.com/gorilla/mux"
+	"github.com/ra-shree/prequal-server/pkg/algorithm"
+	"github.com/ra-shree/prequal-server/pkg/common"
 	"github.com/ra-shree/prequal-server/utils"
 )
 
@@ -15,7 +17,7 @@ type ReverseProxy struct {
 	listeners []Listener
 	proxy     *httputil.ReverseProxy
 	servers   []*http.Server
-	replicas  []*Replica
+	replicas  []*common.Replica
 }
 
 func (r *ReverseProxy) AddListener(address string) {
@@ -54,9 +56,9 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 		urls = append(urls, url)
 	}
 
-	r.replicas = append(r.replicas, &Replica{
-		router:    router,
-		upstreams: urls,
+	r.replicas = append(r.replicas, &common.Replica{
+		Router:    router,
+		Upstreams: urls,
 	})
 
 	return nil
@@ -100,8 +102,8 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 		for _, s := range r.replicas {
 			match := &mux.RouteMatch{}
 
-			if s.router.Match(req, match) {
-				upstream := s.SelectUpstream()
+			if s.Router.Match(req, match) {
+				upstream := s.SelectUpstream(algorithm.RandomDChoice)
 				targetQuery := upstream.RawQuery
 
 				req.URL.Scheme = upstream.Scheme
