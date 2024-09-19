@@ -1,8 +1,8 @@
 .PHONY: run-containers
 run-containers:
-	podman run --rm -d -p 9001:80 --name server1 docker.io/kennethreitz/httpbin
-	podman run --rm -d -p 9002:80 --name server2 docker.io/kennethreitz/httpbin
-	podman run --rm -d -p 9003:80 --name server3 docker.io/kennethreitz/httpbin
+	podman run --rm -d -p 9001:80 --name server1 docker.io/rashree2023/load-balancer-probe-replica:v2
+	podman run --rm -d -p 9002:80 --name server2 docker.io/rashree2023/load-balancer-probe-replica:v2
+	podman run --rm -d -p 9003:80 --name server3 docker.io/rashree2023/load-balancer-probe-replica:v2
 
 ## stop: stops all demo services
 .PHONY: stop

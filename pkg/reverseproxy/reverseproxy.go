@@ -15,9 +15,9 @@ import (
 
 type ReverseProxy struct {
 	listeners []Listener
-	proxy     *httputil.ReverseProxy
+	Proxy     *httputil.ReverseProxy
 	servers   []*http.Server
-	replicas  []*common.Replica
+	Replicas  []*common.Replica
 }
 
 func (r *ReverseProxy) AddListener(address string) {
@@ -38,6 +38,8 @@ func (r *ReverseProxy) AddListenerTLS(address, tlsCert, tlsKey string) {
 	r.listeners = append(r.listeners, l)
 }
 
+type service func(http.ResponseWriter, *http.Request, []*common.Replica)
+
 func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error {
 	var urls = []*url.URL{}
 
@@ -56,7 +58,7 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 		urls = append(urls, url)
 	}
 
-	r.replicas = append(r.replicas, &common.Replica{
+	r.Replicas = append(r.Replicas, &common.Replica{
 		Router:    router,
 		Upstreams: urls,
 	})
@@ -64,10 +66,14 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 	return nil
 }
 
-func (r *ReverseProxy) Start() error {
-	r.proxy = &httputil.ReverseProxy{
+func (r *ReverseProxy) Start(probeService service) error {
+	r.Proxy = &httputil.ReverseProxy{
 		Director: r.Director(),
 	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		probeService(w, req, r.Replicas)
+	})
 
 	for _, l := range r.listeners {
 		listener, err := l.NewListener()
@@ -76,7 +82,7 @@ func (r *ReverseProxy) Start() error {
 			return err
 		}
 
-		srv := &http.Server{Handler: r.proxy}
+		srv := &http.Server{Handler: handler}
 
 		r.servers = append(r.servers, srv)
 
@@ -99,7 +105,7 @@ func (r *ReverseProxy) Start() error {
 
 func (r *ReverseProxy) Director() func(req *http.Request) {
 	return func(req *http.Request) {
-		for _, s := range r.replicas {
+		for _, s := range r.Replicas {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
