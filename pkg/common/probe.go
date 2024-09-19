@@ -1,11 +1,28 @@
 package common
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math/rand/v2"
+	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
-var maxLifeTime time.Duration
+var maxLifeTime time.Duration = 5 * time.Second
+var poolSize = 16
+var probeFactor = 0.5
+var probeRemoveFactor = 1
+var totalReplica = 1
+var mu = 1
+
+var denom = (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor
+var reuseRate = max(1, ((1 + mu) / denom))
+
+var probeQueue = NewServerProbeQueue()
 
 type ServerProbe struct {
 	Name             string
@@ -21,11 +38,27 @@ type ServerProbeItem struct {
 }
 
 type ServerProbeQueue struct {
-	probes   []ServerProbeItem
-	start    int
-	end      int
-	size     int
-	capacity int
+	Probes   []ServerProbeItem
+	Start    int
+	End      int
+	Size     int
+	Capacity int
+	mutex    sync.Mutex
+}
+
+type ProbeResponse struct {
+	ServerName       string `json:"serverName"`
+	RequestsInFlight uint64 `json:"requestInFlight"`
+	Latency          uint64 `json:"latency"`
+}
+
+func NewServerProbe(s *ProbeResponse, u *url.URL) *ServerProbe {
+	return &ServerProbe{
+		Name:             s.ServerName,
+		RequestsInFlight: int(s.RequestsInFlight),
+		Latency:          int(s.Latency),
+		upstream:         u,
+	}
 }
 
 func NewServerProbeItem(s *ServerProbe) *ServerProbeItem {
@@ -38,66 +71,126 @@ func NewServerProbeItem(s *ServerProbe) *ServerProbeItem {
 
 func NewServerProbeQueue() *ServerProbeQueue {
 	return &ServerProbeQueue{
-		start:    0,
-		end:      0,
-		size:     0,
-		capacity: 16,
+		Start:    0,
+		End:      0,
+		Size:     0,
+		Capacity: poolSize,
+		Probes:   make([]ServerProbeItem, poolSize),
 	}
 }
 
 func (q *ServerProbeQueue) Add(probe *ServerProbe) {
-	if q.size == q.capacity {
-		q.start = (q.start + 1) % q.capacity
+	if q.Size == q.Capacity {
+		q.Start = (q.Start + 1) % q.Capacity
 	} else {
-		q.size++
+		q.Size++
 	}
 
-	q.probes[q.end] = *NewServerProbeItem(probe)
-	q.end = (q.end + 1) % q.capacity
+	q.Probes[q.End] = *NewServerProbeItem(probe)
+	q.End = (q.End + 1) % q.Capacity
 }
 
 func (q *ServerProbeQueue) Remove(index int) bool {
-	if q.size == 0 {
+	if q.Size == 0 {
 		return false
 	}
 
-	newProbeList := append(q.probes[:index], q.probes[index+1:]...)
-	q.probes = newProbeList
-	q.size--
-	q.end--
+	newProbeList := append(q.Probes[:index], q.Probes[index+1:]...)
+	q.Probes = newProbeList
+	q.Size--
+	q.End--
 
 	return true
 }
 
 func (q *ServerProbeQueue) RemoveOldest() bool {
-	if q.size == 0 {
+	if q.Size == 0 {
 		return false
 	}
 
-	q.start = (q.start + 1) % q.capacity
-	q.size--
+	q.Start = (q.Start + 1) % q.Capacity
+	q.Size--
 
 	return true
 }
 
-func (q *ServerProbeQueue) RemoveOldProbes() bool {
-	if q.size == 0 {
+func (q *ServerProbeQueue) RemoveProbes() bool {
+	if q.Size == 0 {
 		return false
 	}
 
 	var newProbeList []ServerProbeItem
 
 	count := 0
-	for _, probe := range q.probes {
-		if time.Since(probe.ReceiptTime) < maxLifeTime {
+	for _, probe := range q.Probes {
+		if time.Since(probe.ReceiptTime) < maxLifeTime || probe.used > reuseRate {
 			continue
 		}
 		count++
 		newProbeList = append(newProbeList, probe)
 	}
 
-	q.probes = newProbeList
-	q.size -= count
-	q.end -= count
+	q.Probes = newProbeList
+	q.Size -= count
+	q.End -= count
 	return true
+}
+
+func getProbe(url *url.URL) (*ServerProbe, error) {
+	url.Path = url.Path + "/ping"
+
+	res, err := http.Get(fmt.Sprintf("%s://%s/%s", url.Scheme, url.Host, "ping"))
+	if err != nil {
+		log.Printf("error making get request %v", err)
+		// do something about the replica like removing it from the pool
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		// do somethign about replica here too
+		log.Printf("received non-200 response: %d", res.StatusCode)
+	}
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		log.Printf("error reading response body %v", err)
+	}
+
+	var probeRes ProbeResponse
+
+	err = json.Unmarshal([]byte(body), &probeRes)
+	if err != nil {
+		log.Printf("error parsing JSON: %v", err)
+	}
+
+	// fmt.Printf("\n\nResponse JSON:::::::: \n %v", probeRes.ServerName)
+
+	newProbe := NewServerProbe(&probeRes, url)
+	return newProbe, nil
+}
+
+func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
+	probeRate := randomRound(probeFactor)
+
+	numUpstreams := len(replicas[0].Upstreams)
+	perm := rand.Perm(numUpstreams)
+
+	for i := 0; i < probeRate; i++ {
+		newProbe, err := getProbe(replicas[0].Upstreams[perm[i]])
+		if err != nil {
+			fmt.Printf("error when getting probe %v", err)
+			continue
+		}
+		probeQueue.mutex.Lock()
+		probeQueue.Add(newProbe)
+		probeQueue.mutex.Unlock()
+	}
+}
+
+func ProbeCleanService(t time.Time) {
+	fmt.Printf("Cleaning Probe Queue: %v\n", t)
+	probeQueue.mutex.Lock()
+	defer probeQueue.mutex.Unlock()
+	probeQueue.RemoveProbes()
 }

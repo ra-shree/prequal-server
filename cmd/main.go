@@ -4,13 +4,22 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	// "github.com/gorilla/mux"
+	"github.com/ra-shree/prequal-server/pkg/common"
 	"github.com/ra-shree/prequal-server/pkg/reverseproxy"
 )
 
 func main() {
 	proxy := &reverseproxy.ReverseProxy{}
+
+	probeCleanTimer := time.NewTicker(5 * time.Second)
+	go func() {
+		for i := range probeCleanTimer.C {
+			common.ProbeCleanService(i)
+		}
+	}()
 
 	// r := mux.NewRouter()
 	// r.Host("localhost").PathPrefix("/api")
@@ -18,23 +27,12 @@ func main() {
 	// proxy.AddReplica([]string{"http://localhost:9000"}, r)
 
 	proxy.AddReplica([]string{
-		"http://localhost:9001",
-		"http://localhost:9002",
-		"http://localhost:9003",
-		"http://localhost:9004",
-		"http://localhost:9005",
-		"http://localhost:9006",
-		"http://localhost:9007",
-		"http://localhost:9008",
-		"http://localhost:9009",
-		"http://localhost:9010",
-		"http://localhost:9011",
-		"http://localhost:9012",
+		"http://localhost:1233",
 	}, nil)
 
 	// proxy.AddReplica([]string{"http://localhost:8000"}, r)
 	proxy.AddListener(":8080")
-	if err := proxy.Start(); err != nil {
+	if err := proxy.Start(common.ProbeService); err != nil {
 		log.Fatal(err)
 	}
 
