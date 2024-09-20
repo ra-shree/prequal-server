@@ -2,15 +2,15 @@ package handlers
 
 import (
 	"auth/middleware"
-	"auth/models"
+	"auth/utils"
 	"log"
 	"net/http"
 )
 
-func AuthHandle() {
+func Handler() {
+	//dns for users db
 	
-	dsn := "postgres://admin:Admin01!@localhost:5432/usertable?sslmode=disable"
-	if err := models.InitDB(dsn); err != nil {
+	if err := utils.InitDB(); err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
 

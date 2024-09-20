@@ -72,9 +72,14 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	user.Password = hashedPassword
 	users[user.Username] = user
 
-	
+	// Insert the user into the database
+	if err := models.InsertUser(user); err != nil {
+		http.Error(w, "Error inserting user", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("User registered successfully"))
 }
 
 func containsCapitalLetter(password string) bool {
@@ -126,4 +131,23 @@ func AuthLogin(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Write([]byte("Login successful"))
+}
+
+func GetUsers(w http.ResponseWriter, r *http.Request) {
+    w.Write([]byte("GetUsers handler called")) 
+
+	users, err := models.GetUsersinfo()
+	if err != nil {
+		http.Error(w, "Error fetching users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+
+func ProtectedRoute(w http.ResponseWriter, r *http.Request) {
+	username := r.Context().Value("username").(string)
+	w.Write([]byte("Welcome to load balancer , " + username))
 }
