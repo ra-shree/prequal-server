@@ -6,6 +6,6 @@ import (
 
 func main() {
 
-	handlers.AuthHandle()
+	handlers.Handler()
 
 }
