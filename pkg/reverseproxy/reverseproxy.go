@@ -2,6 +2,7 @@ package reverseproxy
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -10,7 +11,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/ra-shree/prequal-server/pkg/algorithm"
 	"github.com/ra-shree/prequal-server/pkg/common"
-	"github.com/ra-shree/prequal-server/utils"
 )
 
 type ReverseProxy struct {
@@ -110,11 +110,14 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 
 			if s.Router.Match(req, match) {
 				upstream := s.SelectUpstream(algorithm.RandomDChoice)
+
+				fmt.Printf("chose upstream %v", upstream)
+
 				targetQuery := upstream.RawQuery
 
 				req.URL.Scheme = upstream.Scheme
 				req.URL.Host = upstream.Host
-				req.URL.Path, req.URL.RawPath = utils.JoinURLPath(upstream, req.URL)
+				req.URL.Path, req.URL.RawPath = common.JoinURLPath(upstream, req.URL)
 				if targetQuery == "" || req.URL.RawQuery == "" {
 					req.URL.RawQuery = targetQuery + req.URL.RawQuery
 				} else {

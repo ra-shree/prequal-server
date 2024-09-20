@@ -6,7 +6,6 @@ import (
 )
 
 func JoinURLPath(base, u *url.URL) (joinedPath, rawJoinedPath string) {
-
 	joinedPath = path.Join(base.Path, u.Path)
 
 	if u.RawPath != "" {

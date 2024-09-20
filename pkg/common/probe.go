@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 )
@@ -22,13 +23,13 @@ var mu = 1
 var denom = (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor
 var reuseRate = max(1, ((1 + mu) / denom))
 
-var probeQueue = NewServerProbeQueue()
+var ProbeQueue = NewServerProbeQueue()
 
 type ServerProbe struct {
 	Name             string
 	RequestsInFlight int
 	Latency          int
-	upstream         *url.URL
+	Upstream         *url.URL
 }
 
 type ServerProbeItem struct {
@@ -57,7 +58,7 @@ func NewServerProbe(s *ProbeResponse, u *url.URL) *ServerProbe {
 		Name:             s.ServerName,
 		RequestsInFlight: int(s.RequestsInFlight),
 		Latency:          int(s.Latency),
-		upstream:         u,
+		Upstream:         u,
 	}
 }
 
@@ -79,7 +80,14 @@ func NewServerProbeQueue() *ServerProbeQueue {
 	}
 }
 
+func (q *ServerProbeQueue) ProbesInQueue() []ServerProbeItem {
+	return q.Probes
+}
+
 func (q *ServerProbeQueue) Add(probe *ServerProbe) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
 	if q.Size == q.Capacity {
 		q.Start = (q.Start + 1) % q.Capacity
 	} else {
@@ -91,6 +99,9 @@ func (q *ServerProbeQueue) Add(probe *ServerProbe) {
 }
 
 func (q *ServerProbeQueue) Remove(index int) bool {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
 	if q.Size == 0 {
 		return false
 	}
@@ -104,6 +115,9 @@ func (q *ServerProbeQueue) Remove(index int) bool {
 }
 
 func (q *ServerProbeQueue) RemoveOldest() bool {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
 	if q.Size == 0 {
 		return false
 	}
@@ -115,24 +129,31 @@ func (q *ServerProbeQueue) RemoveOldest() bool {
 }
 
 func (q *ServerProbeQueue) RemoveProbes() bool {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
 	if q.Size == 0 {
 		return false
 	}
 
-	var newProbeList []ServerProbeItem
+	removed := 0
+	for i := 0; i < q.Size; i++ {
+		index := (q.Start + i) % q.Capacity
+		probe := q.Probes[index]
 
-	count := 0
-	for _, probe := range q.Probes {
+		// Skip probes that are still valid (i.e., keep them in the queue)
 		if time.Since(probe.ReceiptTime) < maxLifeTime || probe.used > reuseRate {
 			continue
 		}
-		count++
-		newProbeList = append(newProbeList, probe)
+
+		// Remove the probe by adjusting Start index (effectively deleting)
+		removed++
 	}
 
-	q.Probes = newProbeList
-	q.Size -= count
-	q.End -= count
+	// Adjust the queue size and the start pointer
+	q.Size -= removed
+	q.Start = (q.Start + removed) % q.Capacity
+
 	return true
 }
 
@@ -164,7 +185,12 @@ func getProbe(url *url.URL) (*ServerProbe, error) {
 		log.Printf("error parsing JSON: %v", err)
 	}
 
-	// fmt.Printf("\n\nResponse JSON:::::::: \n %v", probeRes.ServerName)
+	err = os.WriteFile("probe.logs", body, 0644)
+	if err != nil {
+		log.Printf("error writing JSON to file: %v", err)
+	}
+
+	fmt.Printf("\n\nResponse JSON:::::::: \n %v %v %v", probeRes.ServerName, probeRes.RequestsInFlight, probeRes.Latency)
 
 	newProbe := NewServerProbe(&probeRes, url)
 	return newProbe, nil
@@ -182,15 +208,28 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 			fmt.Printf("error when getting probe %v", err)
 			continue
 		}
-		probeQueue.mutex.Lock()
-		probeQueue.Add(newProbe)
-		probeQueue.mutex.Unlock()
+		ProbeQueue.Add(newProbe)
+	}
+}
+
+func PeriodicProbeService(t time.Time, replicas []*Replica) {
+	fmt.Printf("\nPeriodic Probe Request: %v\n", t)
+	probeRate := 3
+
+	numUpstreams := len(replicas[0].Upstreams)
+	perm := rand.Perm(numUpstreams)
+
+	for i := 0; i < probeRate; i++ {
+		newProbe, err := getProbe(replicas[0].Upstreams[perm[i]])
+		if err != nil {
+			fmt.Printf("error when getting probe %v", err)
+			continue
+		}
+		ProbeQueue.Add(newProbe)
 	}
 }
 
 func ProbeCleanService(t time.Time) {
-	fmt.Printf("Cleaning Probe Queue: %v\n", t)
-	probeQueue.mutex.Lock()
-	defer probeQueue.mutex.Unlock()
-	probeQueue.RemoveProbes()
+	fmt.Printf("\nCleaning Probe Queue: %v\n", t)
+	ProbeQueue.RemoveProbes()
 }
