@@ -4,23 +4,25 @@ import (
 	"math/rand/v2"
 	"net/url"
 	"sort"
-	"sync"
 
 	"github.com/ra-shree/prequal-server/pkg/common"
 )
 
 // needed to partition into hot and cold probes
 var hot_cold_quantile float64 = 0.6
-var lock sync.RWMutex
 
 func ProbeToReduceLatencyAndQueuing(r *common.Replica) *url.URL {
-	lock.RLock()
-	defer lock.RUnlock()
-	probes := common.ProbeQueue.ProbesInQueue()
+	probes := common.ProbeQueue.Probes
 	numberOfProbes := len(probes)
 
+	// for i := 0; i < len(r.Upstreams); i++ {
+	// 	fmt.Printf("\n\nReplica:\t\t%v\n\n", r.Upstreams[i])
+	// }
 	if numberOfProbes < 2 {
-		return r.Upstreams[rand.IntN(16)]
+		if rand.IntN(2) == 0 {
+			return r.Upstreams[0]
+		}
+		return r.Upstreams[1]
 	}
 
 	sort.Slice(probes, func(i, j int) bool {

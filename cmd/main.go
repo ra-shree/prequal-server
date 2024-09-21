@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -41,6 +42,13 @@ func main() {
 		}
 	}()
 
+	probeSliceChecker := time.NewTicker(1 * time.Second)
+	go func() {
+		for j := range probeSliceChecker.C {
+			fmt.Print(j)
+			fmt.Printf("\n\nProbe Number %v\t\t", len(common.ProbeQueue.Probes))
+		}
+	}()
 	// proxy.AddReplica([]string{"http://localhost:8000"}, r)
 	proxy.AddListener(":8080")
 	if err := proxy.Start(common.ProbeService); err != nil {

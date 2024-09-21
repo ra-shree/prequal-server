@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sync"
 	"time"
 )
@@ -76,7 +77,7 @@ func NewServerProbeQueue() *ServerProbeQueue {
 		End:      0,
 		Size:     0,
 		Capacity: poolSize,
-		Probes:   make([]ServerProbeItem, poolSize),
+		Probes:   make([]ServerProbeItem, 0, 16),
 	}
 }
 
@@ -88,13 +89,14 @@ func (q *ServerProbeQueue) Add(probe *ServerProbe) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
+	fmt.Printf("\n\nAdded a probe and current size %d and capacity %d\n\n", q.Size, q.Capacity)
 	if q.Size == q.Capacity {
 		q.Start = (q.Start + 1) % q.Capacity
 	} else {
 		q.Size++
 	}
 
-	q.Probes[q.End] = *NewServerProbeItem(probe)
+	q.Probes = slices.Insert(q.Probes, q.End, *NewServerProbeItem(probe))
 	q.End = (q.End + 1) % q.Capacity
 }
 
@@ -122,6 +124,8 @@ func (q *ServerProbeQueue) RemoveOldest() bool {
 		return false
 	}
 
+	q.Probes = q.Probes[1:]
+
 	q.Start = (q.Start + 1) % q.Capacity
 	q.Size--
 
@@ -137,12 +141,16 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 	}
 
 	removed := 0
+
+	newProbeList := make([]ServerProbeItem, 0, 16)
+
 	for i := 0; i < q.Size; i++ {
 		index := (q.Start + i) % q.Capacity
 		probe := q.Probes[index]
 
 		// Skip probes that are still valid (i.e., keep them in the queue)
-		if time.Since(probe.ReceiptTime) < maxLifeTime || probe.used > reuseRate {
+		if time.Since(probe.ReceiptTime) < maxLifeTime && probe.used < reuseRate {
+			newProbeList = append(newProbeList, probe)
 			continue
 		}
 
@@ -150,6 +158,7 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 		removed++
 	}
 
+	q.Probes = newProbeList
 	// Adjust the queue size and the start pointer
 	q.Size -= removed
 	q.Start = (q.Start + removed) % q.Capacity
@@ -158,8 +167,6 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 }
 
 func getProbe(url *url.URL) (*ServerProbe, error) {
-	url.Path = url.Path + "/ping"
-
 	res, err := http.Get(fmt.Sprintf("%s://%s/%s", url.Scheme, url.Host, "ping"))
 	if err != nil {
 		log.Printf("error making get request %v", err)
@@ -185,7 +192,7 @@ func getProbe(url *url.URL) (*ServerProbe, error) {
 		log.Printf("error parsing JSON: %v", err)
 	}
 
-	err = os.WriteFile("probe.logs", body, 0644)
+	err = os.WriteFile("probe.log", body, 0644)
 	if err != nil {
 		log.Printf("error writing JSON to file: %v", err)
 	}

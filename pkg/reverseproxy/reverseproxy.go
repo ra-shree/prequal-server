@@ -69,10 +69,14 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 func (r *ReverseProxy) Start(probeService service) error {
 	r.Proxy = &httputil.ReverseProxy{
 		Director: r.Director(),
+		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
+			http.Error(w, "Error proxying request: "+err.Error(), http.StatusBadGateway)
+		},
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		probeService(w, req, r.Replicas)
+		r.Proxy.ServeHTTP(w, req)
 	})
 
 	for _, l := range r.listeners {
@@ -109,9 +113,9 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
-				upstream := s.SelectUpstream(algorithm.RandomDChoice)
+				upstream := s.SelectUpstream(algorithm.ProbeToReduceLatencyAndQueuing)
 
-				fmt.Printf("chose upstream %v", upstream)
+				fmt.Printf("\nchose upstream %v", upstream)
 
 				targetQuery := upstream.RawQuery
 

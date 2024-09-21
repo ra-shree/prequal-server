@@ -9,7 +9,6 @@ import (
 )
 
 func RandomDChoice(r *common.Replica) *url.URL {
-	print(len(r.Upstreams))
 	random := rand.Intn(len(r.Upstreams))
 
 	return r.Upstreams[random]
