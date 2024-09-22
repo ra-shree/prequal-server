@@ -113,9 +113,9 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
-				upstream := s.SelectUpstream(algorithm.ProbeToReduceLatencyAndQueuing)
-
-				fmt.Printf("\nchose upstream %v", upstream)
+				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+				// upstream := s.SelectUpstream(algorithm.RoundRobin)
+				fmt.Printf("\nChose upstream %v\n\n", upstream)
 
 				targetQuery := upstream.RawQuery
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"sync"
 	"time"
 )
@@ -89,14 +88,17 @@ func (q *ServerProbeQueue) Add(probe *ServerProbe) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	fmt.Printf("\n\nAdded a probe and current size %d and capacity %d\n\n", q.Size, q.Capacity)
+	fmt.Printf("\n\nAdded a probe, current size %d, capacity %d\n\n", q.Size, q.Capacity)
 	if q.Size == q.Capacity {
+		// Overwrite the oldest element
+		q.Probes[q.Start] = *NewServerProbeItem(probe)
 		q.Start = (q.Start + 1) % q.Capacity
 	} else {
+		q.Probes = append(q.Probes, *NewServerProbeItem(probe))
 		q.Size++
 	}
 
-	q.Probes = slices.Insert(q.Probes, q.End, *NewServerProbeItem(probe))
+	// Always move End forward
 	q.End = (q.End + 1) % q.Capacity
 }
 
@@ -104,14 +106,24 @@ func (q *ServerProbeQueue) Remove(index int) bool {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	if q.Size == 0 {
+	if q.Size == 0 || index < 0 || index >= q.Size {
 		return false
 	}
 
-	newProbeList := append(q.Probes[:index], q.Probes[index+1:]...)
+	// Compute the actual index in the circular queue
+	actualIndex := (q.Start + index) % q.Capacity
+
+	newProbeList := append(q.Probes[:actualIndex], q.Probes[actualIndex+1:]...)
 	q.Probes = newProbeList
+	// Shift elements after the removed index
+	// for i := actualIndex; i != q.End; i = (i + 1) % q.Capacity {
+	// 	next := (i + 1) % q.Capacity
+	// 	q.Probes[i] = q.Probes[next]
+	// }
+
+	// Adjust the end index and size
+	q.End = (q.End - 1 + q.Capacity) % q.Capacity
 	q.Size--
-	q.End--
 
 	return true
 }
@@ -124,8 +136,7 @@ func (q *ServerProbeQueue) RemoveOldest() bool {
 		return false
 	}
 
-	q.Probes = q.Probes[1:]
-
+	// Increment the Start pointer to remove the oldest item
 	q.Start = (q.Start + 1) % q.Capacity
 	q.Size--
 
@@ -141,8 +152,7 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 	}
 
 	removed := 0
-
-	newProbeList := make([]ServerProbeItem, 0, 16)
+	newProbeList := make([]ServerProbeItem, 0, q.Capacity)
 
 	for i := 0; i < q.Size; i++ {
 		index := (q.Start + i) % q.Capacity
@@ -153,15 +163,14 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 			newProbeList = append(newProbeList, probe)
 			continue
 		}
-
-		// Remove the probe by adjusting Start index (effectively deleting)
 		removed++
 	}
 
+	// Adjust the queue based on the elements kept
 	q.Probes = newProbeList
-	// Adjust the queue size and the start pointer
 	q.Size -= removed
-	q.Start = (q.Start + removed) % q.Capacity
+	q.Start = 0
+	q.End = q.Size % q.Capacity
 
 	return true
 }
@@ -197,7 +206,7 @@ func getProbe(url *url.URL) (*ServerProbe, error) {
 		log.Printf("error writing JSON to file: %v", err)
 	}
 
-	fmt.Printf("\n\nResponse JSON:::::::: \n %v %v %v", probeRes.ServerName, probeRes.RequestsInFlight, probeRes.Latency)
+	// fmt.Printf("\n\nResponse JSON:::::::: \n %v %v %v", probeRes.ServerName, probeRes.RequestsInFlight, probeRes.Latency)
 
 	newProbe := NewServerProbe(&probeRes, url)
 	return newProbe, nil
@@ -220,7 +229,7 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 }
 
 func PeriodicProbeService(t time.Time, replicas []*Replica) {
-	fmt.Printf("\nPeriodic Probe Request: %v\n", t)
+	// fmt.Printf("\nPeriodic Probe Request: %v\n", t)
 	probeRate := 3
 
 	numUpstreams := len(replicas[0].Upstreams)
@@ -237,6 +246,6 @@ func PeriodicProbeService(t time.Time, replicas []*Replica) {
 }
 
 func ProbeCleanService(t time.Time) {
-	fmt.Printf("\nCleaning Probe Queue: %v\n", t)
+	// fmt.Printf("\nCleaning Probe Queue: %v\n", t)
 	ProbeQueue.RemoveProbes()
 }
