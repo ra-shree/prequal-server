@@ -1,36 +1,54 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"time"
 
-	// "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
+	"github.com/ra-shree/prequal-server/pkg/algorithm"
 	"github.com/ra-shree/prequal-server/pkg/common"
 	"github.com/ra-shree/prequal-server/pkg/reverseproxy"
 )
 
 func main() {
 	proxy := &reverseproxy.ReverseProxy{}
+	r := mux.NewRouter()
+	r.Host("localhost").PathPrefix("/")
 
-	probeCleanTimer := time.NewTicker(5 * time.Second)
+	proxy.AddReplica([]string{
+		"http://localhost:9001",
+		"http://localhost:9002",
+		"http://localhost:9003",
+		"http://localhost:9004",
+	}, r)
+
+	periodicProbetime := time.NewTicker(500 * time.Millisecond)
 	go func() {
-		for i := range probeCleanTimer.C {
-			common.ProbeCleanService(i)
+		for i := range periodicProbetime.C {
+			common.PeriodicProbeService(i, proxy.Replicas)
+			algorithm.ProbeToReduceLatencyAndQueuingAlgorithm(proxy.Replicas[0])
 		}
 	}()
 
-	// r := mux.NewRouter()
-	// r.Host("localhost").PathPrefix("/api")
+	probeCleanTimer := time.NewTicker(3000 * time.Millisecond)
+	go func() {
+		for i := range probeCleanTimer.C {
+			common.ProbeCleanService(i)
+			algorithm.EmptyQueue()
+		}
+	}()
 
-	// proxy.AddReplica([]string{"http://localhost:9000"}, r)
+	probeSliceChecker := time.NewTicker(500 * time.Millisecond)
+	go func() {
+		for j := range probeSliceChecker.C {
+			fmt.Print(j)
+			fmt.Printf("\n\nProbe Number %v\t\t", len(common.ProbeQueue.Probes))
+		}
+	}()
 
-	proxy.AddReplica([]string{
-		"http://localhost:1233",
-	}, nil)
-
-	// proxy.AddReplica([]string{"http://localhost:8000"}, r)
 	proxy.AddListener(":8080")
 	if err := proxy.Start(common.ProbeService); err != nil {
 		log.Fatal(err)

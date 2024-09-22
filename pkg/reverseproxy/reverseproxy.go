@@ -2,6 +2,7 @@ package reverseproxy
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -10,7 +11,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/ra-shree/prequal-server/pkg/algorithm"
 	"github.com/ra-shree/prequal-server/pkg/common"
-	"github.com/ra-shree/prequal-server/utils"
 )
 
 type ReverseProxy struct {
@@ -69,10 +69,14 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 func (r *ReverseProxy) Start(probeService service) error {
 	r.Proxy = &httputil.ReverseProxy{
 		Director: r.Director(),
+		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
+			http.Error(w, "Error proxying request: "+err.Error(), http.StatusBadGateway)
+		},
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		probeService(w, req, r.Replicas)
+		r.Proxy.ServeHTTP(w, req)
 	})
 
 	for _, l := range r.listeners {
@@ -109,12 +113,15 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
-				upstream := s.SelectUpstream(algorithm.RandomDChoice)
+				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+				// upstream := s.SelectUpstream(algorithm.RoundRobin)
+				fmt.Printf("\nChose upstream %v\n\n", upstream)
+
 				targetQuery := upstream.RawQuery
 
 				req.URL.Scheme = upstream.Scheme
 				req.URL.Host = upstream.Host
-				req.URL.Path, req.URL.RawPath = utils.JoinURLPath(upstream, req.URL)
+				req.URL.Path, req.URL.RawPath = common.JoinURLPath(upstream, req.URL)
 				if targetQuery == "" || req.URL.RawQuery == "" {
 					req.URL.RawQuery = targetQuery + req.URL.RawQuery
 				} else {
