@@ -1,12 +1,14 @@
 package reverseproxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/ra-shree/prequal-server/pkg/algorithm"
@@ -18,6 +20,7 @@ type ReverseProxy struct {
 	Proxy     *httputil.ReverseProxy
 	servers   []*http.Server
 	Replicas  []*common.Replica
+	mutex     sync.RWMutex
 }
 
 func (r *ReverseProxy) AddListener(address string) {
@@ -68,10 +71,9 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 
 func (r *ReverseProxy) Start(probeService service) error {
 	r.Proxy = &httputil.ReverseProxy{
-		Director: r.Director(),
-		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
-			http.Error(w, "Error proxying request: "+err.Error(), http.StatusBadGateway)
-		},
+		Director:       r.Director(),
+		ErrorHandler:   r.ErrorHandler(),
+		ModifyResponse: r.ModifyResponse(),
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -116,7 +118,7 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
 				// upstream := s.SelectUpstream(algorithm.RoundRobin)
 				fmt.Printf("\nChose upstream %v\n\n", upstream)
-
+				req = req.WithContext(context.WithValue(req.Context(), "current_upstream", upstream))
 				targetQuery := upstream.RawQuery
 
 				req.URL.Scheme = upstream.Scheme
@@ -134,5 +136,44 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 				break
 			}
 		}
+	}
+}
+
+func (r *ReverseProxy) ModifyResponse() func(*http.Response) error {
+	return func(res *http.Response) error {
+		if res.StatusCode == http.StatusInternalServerError || res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusRequestTimeout || res.StatusCode == http.StatusGatewayTimeout {
+			return fmt.Errorf("upstream returned server error")
+		}
+		return nil
+	}
+}
+
+func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, req *http.Request, err error) {
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
+
+		currentUpstream, ok := req.Context().Value("current_upstream").(*url.URL)
+		if !ok || currentUpstream == nil {
+			http.Error(w, "unable to determine upstream", http.StatusInternalServerError)
+			return
+		}
+
+		if err != nil && err.Error() == "upstream returned 500" {
+			if len(r.Replicas[0].Upstreams) == 1 {
+				http.Error(w, "upstream returned error or all upstreams failed", http.StatusBadGateway)
+				return
+			}
+
+			r.Replicas[0].RemoveUpstream(currentUpstream)
+			fmt.Printf("500 Error detected. Retrying with next upstream...")
+
+			req.URL = r.Replicas[0].SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+			r.Proxy.ServeHTTP(w, req)
+			if w.Header().Get("X-Success") == "true" {
+				return
+			}
+		}
+		http.Error(w, "Upstream returned error or all upstreams failed", http.StatusBadGateway)
 	}
 }
