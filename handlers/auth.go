@@ -1,13 +1,14 @@
 package handlers
 
 import (
-	"auth/models"
-	"auth/utils"
 	"encoding/json"
 	"net/http"
 	"regexp"
 	"sync"
 	"unicode"
+
+	"github.com/ra-shree/prequal-server/pkg/common"
+	"github.com/ra-shree/prequal-server/pkg/models"
 )
 
 var (
@@ -25,7 +26,7 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate username's length
-	if len(user.Username) < 3 || len(user.Username) >32 {
+	if len(user.Username) < 3 || len(user.Username) > 32 {
 		http.Error(w, "Username must be at least 3 characters long", http.StatusBadRequest)
 		return
 	}
@@ -36,7 +37,7 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate password 
+	// Validate password
 	if len(user.Password) < 8 || len(user.Password) > 32 {
 		http.Error(w, "Password must be between 8-32 characters long", http.StatusBadRequest)
 		return
@@ -62,7 +63,7 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hash the password
-	hashedPassword, err := utils.HashPassword(user.Password)
+	hashedPassword, err := common.HashPassword(user.Password)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
@@ -102,20 +103,18 @@ func AuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
-
 	usersMutex.Lock()
 	defer usersMutex.Unlock()
 
 	// Fetch user from DB
 	user, exists := users[creds.Username]
-	if !exists || !utils.CheckPasswordHash(creds.Password, user.Password) {
+	if !exists || !common.CheckPasswordHash(creds.Password, user.Password) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	// Generate JWT token
-	tokenString, err := utils.GenerateJWT(creds.Username)
+	tokenString, err := common.GenerateJWT(creds.Username)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
@@ -134,7 +133,7 @@ func AuthLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUsers(w http.ResponseWriter, r *http.Request) {
-    w.Write([]byte("GetUsers handler called")) 
+	w.Write([]byte("GetUsers handler called"))
 
 	users, err := models.GetUsersinfo()
 	if err != nil {
@@ -145,7 +144,6 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
-
 
 func ProtectedRoute(w http.ResponseWriter, r *http.Request) {
 	username := r.Context().Value("username").(string)
