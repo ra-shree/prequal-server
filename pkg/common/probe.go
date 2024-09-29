@@ -175,23 +175,27 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 	return true
 }
 
-func getProbe(url *url.URL) (*ServerProbe, error) {
+func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
+	url := replica.Upstreams[idx]
+
 	res, err := http.Get(fmt.Sprintf("%s://%s/%s", url.Scheme, url.Host, "ping"))
 	if err != nil {
 		log.Printf("error making get request %v", err)
-		// do something about the replica like removing it from the pool
+		replica.RemoveUpstream(url)
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		// do somethign about replica here too
 		log.Printf("received non-200 response: %d", res.StatusCode)
+		return nil, err
 	}
 
 	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
 		log.Printf("error reading response body %v", err)
+		return nil, err
 	}
 
 	var probeRes ProbeResponse
@@ -199,11 +203,13 @@ func getProbe(url *url.URL) (*ServerProbe, error) {
 	err = json.Unmarshal([]byte(body), &probeRes)
 	if err != nil {
 		log.Printf("error parsing JSON: %v", err)
+		return nil, err
 	}
 
 	err = os.WriteFile("probe.log", body, 0644)
 	if err != nil {
 		log.Printf("error writing JSON to file: %v", err)
+		return nil, err
 	}
 
 	// fmt.Printf("\n\nResponse JSON:::::::: \n %v %v %v", probeRes.ServerName, probeRes.RequestsInFlight, probeRes.Latency)
@@ -219,7 +225,7 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 	perm := rand.Perm(numUpstreams)
 
 	for i := 0; i < probeRate; i++ {
-		newProbe, err := getProbe(replicas[0].Upstreams[perm[i]])
+		newProbe, err := getProbe(replicas[0], perm[i])
 		if err != nil {
 			fmt.Printf("error when getting probe %v", err)
 			continue
@@ -236,7 +242,7 @@ func PeriodicProbeService(t time.Time, replicas []*Replica) {
 	perm := rand.Perm(numUpstreams)
 
 	for i := 0; i < probeRate; i++ {
-		newProbe, err := getProbe(replicas[0].Upstreams[perm[i]])
+		newProbe, err := getProbe(replicas[0], perm[i])
 		if err != nil {
 			fmt.Printf("error when getting probe %v", err)
 			continue
