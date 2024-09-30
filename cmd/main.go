@@ -49,7 +49,7 @@ func main() {
 		}
 	}()
 
-	proxy.AddListener(":8080")
+	proxy.AddListener(":8000")
 	if err := proxy.Start(common.ProbeService); err != nil {
 		log.Fatal(err)
 	}

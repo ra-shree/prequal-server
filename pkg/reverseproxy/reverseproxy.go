@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -111,6 +112,17 @@ func (r *ReverseProxy) Start(probeService service) error {
 
 func (r *ReverseProxy) Director() func(req *http.Request) {
 	return func(req *http.Request) {
+		if req.URL.Path == "/admin" || strings.HasPrefix(req.URL.Path, "/admin/") {
+			req.URL.Scheme = "http"
+			req.URL.Host = "localhost:8080"
+
+			fmt.Print(req.URL.Path)
+			if _, ok := req.Header["User-Agent"]; !ok {
+				req.Header.Set("User-Agent", "")
+			}
+			return
+		}
+
 		for _, s := range r.Replicas {
 			match := &mux.RouteMatch{}
 

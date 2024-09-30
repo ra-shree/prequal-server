@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"auth/utils"
 	"context"
 	"net/http"
-)
 
+	"github.com/ra-shree/prequal-server/pkg/common"
+)
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +19,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims, err := utils.ValidateJWT(cookie.Value)
+		claims, err := common.ValidateJWT(cookie.Value)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
