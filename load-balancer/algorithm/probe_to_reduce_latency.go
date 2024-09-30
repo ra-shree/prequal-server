@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ra-shree/prequal-server/pkg/common"
+	"github.com/ra-shree/prequal-server/load-balancer/common"
 )
 
 type UpstreamDecisionQueueItem struct {

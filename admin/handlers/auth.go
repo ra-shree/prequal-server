@@ -5,10 +5,9 @@ import (
 	"net/http"
 	"regexp"
 	"sync"
-	"unicode"
 
-	"github.com/ra-shree/prequal-server/pkg/common"
-	"github.com/ra-shree/prequal-server/pkg/models"
+	"github.com/ra-shree/prequal-server/admin/models"
+	"github.com/ra-shree/prequal-server/admin/utils"
 )
 
 var (
@@ -17,6 +16,11 @@ var (
 	emailRegex   = regexp.MustCompile(`^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$`)
 	psymbolRegex = regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`)
 )
+
+type Credentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
 
 func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	var user models.User
@@ -43,12 +47,12 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !containsCapitalLetter(user.Password) {
+	if !utils.ContainsCapitalLetter(user.Password) {
 		http.Error(w, "Password must contain at least one capital letter", http.StatusBadRequest)
 		return
 	}
 
-	if !containsSymbol(user.Password) {
+	if !utils.ContainsSymbol(psymbolRegex, user.Password) {
 		http.Error(w, "Password must contain at least one symbol", http.StatusBadRequest)
 		return
 	}
@@ -63,7 +67,7 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hash the password
-	hashedPassword, err := common.HashPassword(user.Password)
+	hashedPassword, err := utils.HashPassword(user.Password)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
@@ -83,21 +87,8 @@ func AuthRegister(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("User registered successfully"))
 }
 
-func containsCapitalLetter(password string) bool {
-	for _, ch := range password {
-		if unicode.IsUpper(ch) {
-			return true
-		}
-	}
-	return false
-}
-
-func containsSymbol(password string) bool {
-	return psymbolRegex.MatchString(password)
-}
-
 func AuthLogin(w http.ResponseWriter, r *http.Request) {
-	var creds models.Credentials
+	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
@@ -108,13 +99,13 @@ func AuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch user from DB
 	user, exists := users[creds.Username]
-	if !exists || !common.CheckPasswordHash(creds.Password, user.Password) {
+	if !exists || !utils.CheckPasswordHash(creds.Password, user.Password) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	// Generate JWT token
-	tokenString, err := common.GenerateJWT(creds.Username)
+	tokenString, err := utils.GenerateJWT(creds.Username)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return

@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"auth/utils"
 	"context"
 	"net/http"
-)
 
+	"github.com/ra-shree/prequal-server/admin/utils"
+)
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
