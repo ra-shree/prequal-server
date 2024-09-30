@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ra-shree/prequal-server/admin/utils"
+	"github.com/ra-shree/prequal-server/pkg/common"
 )
 
 func AuthMiddleware(next http.Handler) http.Handler {
@@ -19,7 +19,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims, err := utils.ValidateJWT(cookie.Value)
+		claims, err := common.ValidateJWT(cookie.Value)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
