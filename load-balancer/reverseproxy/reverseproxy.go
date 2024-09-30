@@ -12,8 +12,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/pkg/algorithm"
-	"github.com/ra-shree/prequal-server/pkg/common"
+	"github.com/ra-shree/prequal-server/load-balancer/algorithm"
+	"github.com/ra-shree/prequal-server/load-balancer/common"
 )
 
 type ReverseProxy struct {
@@ -116,7 +116,6 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			req.URL.Scheme = "http"
 			req.URL.Host = "localhost:8080"
 
-			fmt.Print(req.URL.Path)
 			if _, ok := req.Header["User-Agent"]; !ok {
 				req.Header.Set("User-Agent", "")
 			}

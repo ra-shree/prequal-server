@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/pkg/algorithm"
-	"github.com/ra-shree/prequal-server/pkg/common"
-	"github.com/ra-shree/prequal-server/pkg/reverseproxy"
+	"github.com/ra-shree/prequal-server/load-balancer/algorithm"
+	"github.com/ra-shree/prequal-server/load-balancer/common"
+	"github.com/ra-shree/prequal-server/load-balancer/reverseproxy"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 		}
 	}()
 
-	probeCleanTimer := time.NewTicker(3000 * time.Millisecond)
+	probeCleanTimer := time.NewTicker(2000 * time.Millisecond)
 	go func() {
 		for i := range probeCleanTimer.C {
 			common.ProbeCleanService(i)
