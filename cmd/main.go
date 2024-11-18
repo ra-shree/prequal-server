@@ -14,6 +14,9 @@ import (
 )
 
 func main() {
+	go func() {
+		queue.SetupQueue()
+	}()
 	proxy := &reverseproxy.ReverseProxy{}
 	r := mux.NewRouter()
 	r.Host("localhost").PathPrefix("/")
