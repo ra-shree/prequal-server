@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/load-balancer/algorithm"
-	"github.com/ra-shree/prequal-server/load-balancer/common"
-	"github.com/ra-shree/prequal-server/load-balancer/reverseproxy"
+	"github.com/ra-shree/prequal-server/algorithm"
+	"github.com/ra-shree/prequal-server/common"
+	"github.com/ra-shree/prequal-server/reverseproxy"
 )
 
 func main() {

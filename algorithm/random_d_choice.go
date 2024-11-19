@@ -5,7 +5,7 @@ import (
 
 	"math/rand"
 
-	"github.com/ra-shree/prequal-server/load-balancer/common"
+	"github.com/ra-shree/prequal-server/common"
 )
 
 func RandomDChoice(r *common.Replica) *url.URL {
