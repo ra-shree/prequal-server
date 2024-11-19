@@ -12,8 +12,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/load-balancer/algorithm"
-	"github.com/ra-shree/prequal-server/load-balancer/common"
+	"github.com/ra-shree/prequal-server/algorithm"
+	"github.com/ra-shree/prequal-server/common"
 )
 
 type ReverseProxy struct {

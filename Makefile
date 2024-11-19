@@ -22,4 +22,4 @@ help:
 ## run: starts demo http services
 .PHONY: run-proxy-server
 run-proxy-server:
-	go run load-balancer/cmd/main.go
+	go run cmd/main.go

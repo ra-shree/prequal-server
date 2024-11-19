@@ -3,7 +3,7 @@ package algorithm
 import (
 	"net/url"
 
-	"github.com/ra-shree/prequal-server/load-balancer/common"
+	"github.com/ra-shree/prequal-server/common"
 )
 
 var lastUpstream int
