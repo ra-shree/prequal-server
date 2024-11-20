@@ -1,15 +1,15 @@
-package queue
+package messaging
 
 import (
 	"context"
 	"log"
 	"time"
 
-	"github.com/ra-shree/prequal-server/load-balancer/common"
+	"github.com/ra-shree/prequal-server/common"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func SetupQueue() {
+func SetupPublisher() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	common.FailOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
@@ -19,12 +19,12 @@ func SetupQueue() {
 	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
-		"admin", // name
-		true,    // durable
-		false,   // delete when unused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+		"reverseproxy-to-admin", // name
+		true,                    // durable
+		false,                   // delete when unused
+		false,                   // exclusive
+		false,                   // no-wait
+		nil,                     // arguments
 	)
 	common.FailOnError(err, "Failed to declare a queue")
 

@@ -10,13 +10,15 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/ra-shree/prequal-server/algorithm"
 	"github.com/ra-shree/prequal-server/common"
+	"github.com/ra-shree/prequal-server/messaging"
 	"github.com/ra-shree/prequal-server/reverseproxy"
 )
 
 func main() {
 	go func() {
-		queue.SetupQueue()
+		messaging.SetupPublisher()
 	}()
+
 	proxy := &reverseproxy.ReverseProxy{}
 	r := mux.NewRouter()
 	r.Host("localhost").PathPrefix("/")
