@@ -15,9 +15,18 @@ import (
 )
 
 func main() {
+	messaging.InitializePublisher()
+	defer messaging.CleanupPublisher()
+
 	go func() {
-		messaging.SetupPublisher()
+		messaging.SetupConsumer()
 	}()
+
+	// msg := messaging.Message{
+	// 	Name: "example",
+	// 	Body: []string{"item1", "item2", "item3"},
+	// }
+	// messaging.PublishMessage("reverseproxy-to-admin", &msg)
 
 	proxy := &reverseproxy.ReverseProxy{}
 	r := mux.NewRouter()
