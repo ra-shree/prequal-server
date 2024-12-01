@@ -3,6 +3,8 @@ package messaging
 import (
 	"encoding/json"
 	"log"
+
+	"github.com/ra-shree/prequal-server/common"
 )
 
 type Message struct {
@@ -22,6 +24,17 @@ func processMessage(body []byte) {
 	if err != nil {
 		log.Printf("Failed to decode message: %v", err)
 		return
+	}
+
+	switch {
+	case msg.Name == "replica-added":
+		message := Message{
+			Name: "replica added successfully",
+			Body: "",
+		}
+
+		PublishMessage(common.PUBLISHING_QUEUE, &message)
+
 	}
 	log.Print("Received a message \n")
 	log.Printf("Name: %v", msg.Name)

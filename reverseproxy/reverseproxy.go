@@ -90,7 +90,7 @@ func (r *ReverseProxy) Start(probeService service) error {
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		probeService(w, req, r.Replicas)
+		// probeService(w, req, r.Replicas)
 		r.Proxy.ServeHTTP(w, req)
 	})
 

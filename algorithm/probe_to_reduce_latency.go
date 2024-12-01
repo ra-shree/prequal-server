@@ -48,7 +48,7 @@ func ProbeToReduceLatencyAndQueuingAlgorithm(r *common.Replica) {
 	// 	fmt.Printf("\n\nReplica:\t\t%v\n\n", r.Upstreams[i])
 	// }
 
-	if len(r.Upstreams) == 1 {
+	if len(r.Upstreams) == 1 || numberOfProbes <= 0 {
 		Enqueue(r.Upstreams[0])
 		return
 	}

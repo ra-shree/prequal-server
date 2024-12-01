@@ -8,7 +8,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 )
@@ -181,7 +180,6 @@ func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
 	res, err := http.Get(fmt.Sprintf("%s://%s/%s", url.Scheme, url.Host, "ping"))
 	if err != nil {
 		log.Printf("error making get request %v", err)
-		replica.RemoveUpstream(url)
 		return nil, err
 	}
 	defer res.Body.Close()
@@ -206,11 +204,11 @@ func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
 		return nil, err
 	}
 
-	err = os.WriteFile("probe.log", body, 0644)
-	if err != nil {
-		log.Printf("error writing JSON to file: %v", err)
-		return nil, err
-	}
+	// err = os.WriteFile("probe.log", body, 0644)
+	// if err != nil {
+	// 	log.Printf("error writing JSON to file: %v", err)
+	// 	return nil, err
+	// }
 
 	// fmt.Printf("\n\nResponse JSON:::::::: \n %v %v %v", probeRes.ServerName, probeRes.RequestsInFlight, probeRes.Latency)
 
@@ -227,7 +225,7 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 	for i := 0; i < probeRate; i++ {
 		newProbe, err := getProbe(replicas[0], perm[i])
 		if err != nil {
-			fmt.Printf("error when getting probe %v", err)
+			fmt.Printf("error when getting probe in probe service %v\n", err)
 			continue
 		}
 		ProbeQueue.Add(newProbe)
@@ -236,7 +234,7 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 
 func PeriodicProbeService(t time.Time, replicas []*Replica) {
 	// fmt.Printf("\nPeriodic Probe Request: %v\n", t)
-	probeRate := 3
+	probeRate := randomRound(probeFactor)
 
 	numUpstreams := len(replicas[0].Upstreams)
 	perm := rand.Perm(numUpstreams)
@@ -244,7 +242,8 @@ func PeriodicProbeService(t time.Time, replicas []*Replica) {
 	for i := 0; i < probeRate; i++ {
 		newProbe, err := getProbe(replicas[0], perm[i])
 		if err != nil {
-			fmt.Printf("error when getting probe %v", err)
+			fmt.Printf("error when getting probe %v\n", err)
+			replicas[0].RemoveUpstream(replicas[0].Upstreams[perm[i]])
 			continue
 		}
 		ProbeQueue.Add(newProbe)

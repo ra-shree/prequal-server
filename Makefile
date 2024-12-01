@@ -23,3 +23,8 @@ help:
 .PHONY: run-proxy-server
 run-proxy-server:
 	go run cmd/main.go
+
+## run: starts rabbitmq service
+.PHONY: run-rabbitmq
+run-rabbitmq:
+	podman run -it --rm --name rabbitmq -p 5672:5672 -p 15672:15672 docker.io/rabbitmq:4.0-management
