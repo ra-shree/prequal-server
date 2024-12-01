@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/ra-shree/prequal-server/messaging"
 )
 
 // represents a replica of the backend server that requests are forwarded to
@@ -31,6 +32,14 @@ func (t *Replica) RemoveUpstream(faultyUpstream *url.URL) {
 		if upstream.String() == faultyUpstream.String() {
 			t.Upstreams = append(t.Upstreams[:i], t.Upstreams[i+1:]...)
 			fmt.Printf("Removed faulty upstream: %s\n", faultyUpstream.String())
+
+			// sending message to admin server when removing replica``
+			msg := messaging.Message{
+				Name: messaging.REMOVE_REPLICA,
+				Body: faultyUpstream.String(),
+			}
+
+			messaging.PublishMessage(messaging.PUBLISHING_QUEUE, &msg)
 			return
 		}
 	}

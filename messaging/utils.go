@@ -3,8 +3,6 @@ package messaging
 import (
 	"encoding/json"
 	"log"
-
-	"github.com/ra-shree/prequal-server/common"
 )
 
 type Message struct {
@@ -33,7 +31,7 @@ func processMessage(body []byte) {
 			Body: "",
 		}
 
-		PublishMessage(common.PUBLISHING_QUEUE, &message)
+		PublishMessage(PUBLISHING_QUEUE, &message)
 
 	}
 	log.Print("Received a message \n")

@@ -14,7 +14,7 @@ import (
 
 var maxLifeTime time.Duration = 5 * time.Second
 var poolSize = 16
-var probeFactor = 0.5
+var probeFactor = 1.2
 var probeRemoveFactor = 1
 var totalReplica = 1
 var mu = 1
@@ -175,6 +175,8 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 }
 
 func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
+	replica.Lock.RLock()
+	defer replica.Lock.RUnlock()
 	url := replica.Upstreams[idx]
 
 	res, err := http.Get(fmt.Sprintf("%s://%s/%s", url.Scheme, url.Host, "ping"))
@@ -244,6 +246,7 @@ func PeriodicProbeService(t time.Time, replicas []*Replica) {
 		if err != nil {
 			fmt.Printf("error when getting probe %v\n", err)
 			replicas[0].RemoveUpstream(replicas[0].Upstreams[perm[i]])
+
 			continue
 		}
 		ProbeQueue.Add(newProbe)

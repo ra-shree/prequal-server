@@ -38,6 +38,10 @@ func main() {
 	log.Print("Registering replica servers from database...")
 	replicas := api.GetReplicas()
 
+	if len(replicas) == 0 {
+		log.Panicf("No replicas found in database. Exiting...")
+	}
+
 	for _, replica := range replicas {
 		log.Printf("Adding replica with url: %v", replica)
 	}
