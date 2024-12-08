@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(file)
+
 	log.Print("Establishing connection with publishing queue...")
 	messaging.InitializePublisher()
 	defer messaging.CleanupPublisher()
@@ -31,9 +37,10 @@ func main() {
 	// messaging.PublishMessage("reverseproxy-to-admin", &msg)
 
 	log.Print("Initializing reverse proxy...")
-	proxy := &reverseproxy.ReverseProxy{}
-	r := mux.NewRouter()
-	r.Host("localhost").PathPrefix("/")
+	reverseproxy.Proxy = &reverseproxy.ReverseProxy{}
+
+	common.MuxRouter = mux.NewRouter()
+	common.MuxRouter.Host("localhost").PathPrefix("/")
 
 	log.Print("Registering replica servers from database...")
 	replicas := api.GetReplicas()
@@ -42,11 +49,24 @@ func main() {
 		log.Panicf("No replicas found in database. Exiting...")
 	}
 
-	for _, replica := range replicas {
-		log.Printf("Adding replica with url: %v", replica)
-	}
+	// for _, replica := range replicas {
+	// 	log.Printf("Adding replica with url: %v", replica)
+	// }
 
-	proxy.AddReplica(replicas, r)
+	reverseproxy.Proxy.AddReplica(replicas, common.MuxRouter)
+	log.Print("Replicas added successfully")
+
+	log.Print("Configuring algorithm parameters from database...")
+	prequalParameters := api.GetPrequalParameters()
+	common.CurrentPrequalParameters = *common.NewPrequalParameters(
+		prequalParameters["max_life_time"].(int),
+		prequalParameters["pool_size"].(int),
+		prequalParameters["probe_factor"].(float64),
+		prequalParameters["probe_remove_factor"].(int),
+		len(replicas),
+		prequalParameters["mu"].(int))
+
+	common.InitializeStatistics(replicas)
 
 	// proxy.AddReplica([]string{
 	// 	"http://localhost:9001",
@@ -55,22 +75,20 @@ func main() {
 	// 	"http://localhost:9004",
 	// }, r)
 
-	log.Print("Replicas added successfully")
-
 	log.Print("Starting probe service...")
 	periodicProbetime := time.NewTicker(500 * time.Millisecond)
 	go func() {
-		for i := range periodicProbetime.C {
-			common.PeriodicProbeService(i, proxy.Replicas)
-			algorithm.ProbeToReduceLatencyAndQueuingAlgorithm(proxy.Replicas[0])
+		for range periodicProbetime.C {
+			common.PeriodicProbeService(reverseproxy.Proxy.Replicas[0])
+			algorithm.ProbeToReduceLatencyAndQueuingAlgorithm(reverseproxy.Proxy.Replicas[0])
 		}
 	}()
 
 	log.Print("Starting probe cleaner service...")
-	probeCleanTimer := time.NewTicker(2000 * time.Millisecond)
+	probeCleanTimer := time.NewTicker(2 * time.Second)
 	go func() {
-		for i := range probeCleanTimer.C {
-			common.ProbeCleanService(i)
+		for range probeCleanTimer.C {
+			common.ProbeCleanService()
 			algorithm.EmptyQueue()
 		}
 	}()
@@ -84,9 +102,17 @@ func main() {
 	// 	}
 	// }()
 
+	log.Print("Start statistics service...")
+	statisticsTimer := time.NewTicker(10 * time.Second)
+	go func() {
+		for range statisticsTimer.C {
+			messaging.StatisticsUpdated()
+		}
+	}()
+
 	log.Print("Starting reverse proxy...")
-	proxy.AddListener(":8000")
-	if err := proxy.Start(common.ProbeService); err != nil {
+	reverseproxy.Proxy.AddListener(":8000")
+	if err := reverseproxy.Proxy.Start(common.ProbeService); err != nil {
 		log.Fatal(err)
 	}
 

@@ -12,15 +12,41 @@ import (
 	"time"
 )
 
-var maxLifeTime time.Duration = 5 * time.Second
-var poolSize = 16
-var probeFactor = 1.2
-var probeRemoveFactor = 1
-var totalReplica = 1
-var mu = 1
+type PrequalParameters struct {
+	MaxLifeTime       time.Duration
+	PoolSize          int
+	ProbeFactor       float64
+	ProbeRemoveFactor int
+	TotalReplica      int
+	Mu                int
+	Denominator       int
+	ReuseRate         int
+}
 
-var denom = (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor
-var reuseRate = max(1, ((1 + mu) / denom))
+func NewPrequalParameters(maxLifeTime int, poolSize int, probeFactor float64, probeRemoveFactor int, totalReplica int, mu int) *PrequalParameters {
+	return &PrequalParameters{
+		MaxLifeTime:       time.Duration(maxLifeTime) * time.Second,
+		PoolSize:          poolSize,
+		ProbeFactor:       probeFactor,
+		ProbeRemoveFactor: probeRemoveFactor,
+		TotalReplica:      totalReplica,
+		Mu:                mu,
+		Denominator:       (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor,
+		ReuseRate:         max(1, ((1+mu)/(1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor)),
+	}
+}
+
+var CurrentPrequalParameters PrequalParameters
+
+// var maxLifeTime time.Duration = 5 * time.Second
+// var poolSize = 16
+// var probeFactor = 1.2
+// var probeRemoveFactor = 1
+// var totalReplica = 1
+// var mu = 1
+
+// var denom = (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor
+// var reuseRate = max(1, ((1 + mu) / denom))
 
 var ProbeQueue = NewServerProbeQueue()
 
@@ -74,7 +100,7 @@ func NewServerProbeQueue() *ServerProbeQueue {
 		Start:    0,
 		End:      0,
 		Size:     0,
-		Capacity: poolSize,
+		Capacity: 16,
 		Probes:   make([]ServerProbeItem, 0, 16),
 	}
 }
@@ -158,7 +184,7 @@ func (q *ServerProbeQueue) RemoveProbes() bool {
 		probe := q.Probes[index]
 
 		// Skip probes that are still valid (i.e., keep them in the queue)
-		if time.Since(probe.ReceiptTime) < maxLifeTime && probe.used < reuseRate {
+		if time.Since(probe.ReceiptTime) < CurrentPrequalParameters.MaxLifeTime && probe.used < CurrentPrequalParameters.ReuseRate {
 			newProbeList = append(newProbeList, probe)
 			continue
 		}
@@ -219,7 +245,7 @@ func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
 }
 
 func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
-	probeRate := randomRound(probeFactor)
+	probeRate := randomRound(CurrentPrequalParameters.ProbeFactor)
 
 	numUpstreams := len(replicas[0].Upstreams)
 	perm := rand.Perm(numUpstreams)
@@ -234,18 +260,18 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 	}
 }
 
-func PeriodicProbeService(t time.Time, replicas []*Replica) {
+func PeriodicProbeService(replica *Replica) {
 	// fmt.Printf("\nPeriodic Probe Request: %v\n", t)
-	probeRate := randomRound(probeFactor)
+	probeRate := randomRound(CurrentPrequalParameters.ProbeFactor)
 
-	numUpstreams := len(replicas[0].Upstreams)
+	numUpstreams := len(replica.Upstreams)
 	perm := rand.Perm(numUpstreams)
 
 	for i := 0; i < probeRate; i++ {
-		newProbe, err := getProbe(replicas[0], perm[i])
+		newProbe, err := getProbe(replica, perm[i])
 		if err != nil {
 			fmt.Printf("error when getting probe %v\n", err)
-			replicas[0].RemoveUpstream(replicas[0].Upstreams[perm[i]])
+			replica.RemoveUpstream(replica.Upstreams[perm[i]])
 
 			continue
 		}
@@ -253,7 +279,7 @@ func PeriodicProbeService(t time.Time, replicas []*Replica) {
 	}
 }
 
-func ProbeCleanService(t time.Time) {
+func ProbeCleanService() {
 	// fmt.Printf("\nCleaning Probe Queue: %v\n", t)
 	ProbeQueue.RemoveProbes()
 }
