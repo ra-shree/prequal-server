@@ -70,6 +70,18 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 	return nil
 }
 
+func (r *ReverseProxy) RemoveReplica(upstream string) error {
+	for i, replica := range r.Replicas {
+		for _, url := range replica.Upstreams {
+			if url.String() == upstream {
+				r.Replicas = append(r.Replicas[:i], r.Replicas[i+1:]...)
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("replica with the specified upstream URL not found")
+}
+
 func (r *ReverseProxy) Start(probeService service) error {
 	r.Proxy = &httputil.ReverseProxy{
 		Director:       r.Director(),
@@ -78,7 +90,7 @@ func (r *ReverseProxy) Start(probeService service) error {
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		probeService(w, req, r.Replicas)
+		// probeService(w, req, r.Replicas)
 		r.Proxy.ServeHTTP(w, req)
 	})
 

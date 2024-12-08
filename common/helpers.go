@@ -1,6 +1,7 @@
 package common
 
 import (
+	"log"
 	"math"
 	"math/rand/v2"
 	"net/url"
@@ -34,4 +35,10 @@ func JoinURLPath(base, u *url.URL) (joinedPath, rawJoinedPath string) {
 	}
 
 	return joinedPath, rawJoinedPath
+}
+
+func FailOnError(err error, msg string) {
+	if err != nil {
+		log.Panicf("%s: %s", msg, err)
+	}
 }
