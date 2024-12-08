@@ -8,18 +8,6 @@ import (
 	"net/http"
 )
 
-const adminUrl string = "http://localhost:8080/admin"
-
-type ReplicaResponse struct {
-	Id                  int    `json:"id"`
-	Name                string `json:"name"`
-	Url                 string `json:"url"`
-	Status              string `json:"status"`
-	HealthCheckEndpoint string `json:"HealthCheckEndpoint"`
-	CreatedAt           string `json:"created_at"`
-	UpdatedAt           string `json:"updated_at"`
-}
-
 type GetReplicaResponse struct {
 	Success bool
 	Data    []ReplicaResponse

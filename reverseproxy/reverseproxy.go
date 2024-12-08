@@ -16,6 +16,8 @@ import (
 	"github.com/ra-shree/prequal-server/common"
 )
 
+var Proxy *ReverseProxy
+
 type ReverseProxy struct {
 	listeners []Listener
 	Proxy     *httputil.ReverseProxy
@@ -139,6 +141,9 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 
 			if s.Router.Match(req, match) {
 				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+
+				common.IncrementSuccessfulRequests(upstream.String())
+
 				// upstream := s.SelectUpstream(algorithm.RoundRobin)
 				fmt.Printf("\nChose upstream %v\n\n", upstream)
 				req = req.WithContext(context.WithValue(req.Context(), "current_upstream", upstream))
@@ -182,18 +187,21 @@ func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, e
 			return
 		}
 
+		common.IncrementFailedRequests(currentUpstream.String())
+
 		if err != nil && err.Error() == "upstream returned 500" {
 			if len(r.Replicas[0].Upstreams) == 1 {
 				http.Error(w, "upstream returned error or all upstreams failed", http.StatusBadGateway)
 				return
 			}
 
-			r.Replicas[0].RemoveUpstream(currentUpstream)
+			// r.Replicas[0].RemoveUpstream(currentUpstream)
 			fmt.Printf("500 Error detected. Retrying with next upstream...")
 
 			req.URL = r.Replicas[0].SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
 			r.Proxy.ServeHTTP(w, req)
 			if w.Header().Get("X-Success") == "true" {
+				common.IncrementSuccessfulRequests(req.URL.String())
 				return
 			}
 		}
