@@ -92,7 +92,7 @@ func (r *ReverseProxy) Start(probeService service) error {
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// probeService(w, req, r.Replicas)
+		probeService(w, req, r.Replicas)
 		r.Proxy.ServeHTTP(w, req)
 	})
 
@@ -142,6 +142,7 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			if s.Router.Match(req, match) {
 				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
 
+				// log.Printf("Selected upstream: %v\n", upstream.String())
 				common.IncrementSuccessfulRequests(upstream.String())
 
 				// upstream := s.SelectUpstream(algorithm.RoundRobin)

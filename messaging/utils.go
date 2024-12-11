@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/url"
 
-	"github.com/ra-shree/prequal-server/common"
 	"github.com/ra-shree/prequal-server/reverseproxy"
 )
 
@@ -53,7 +52,6 @@ func processMessage(body []byte) {
 		}
 
 		reverseproxy.Proxy.Replicas[0].AddUpstream(replica.Url)
-		common.AppendNewReplica(replica.Url)
 
 		// send the message to the admin server
 		ReplicaAdded(replica.Url)
