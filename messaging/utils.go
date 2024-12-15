@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/ra-shree/prequal-server/common"
 	"github.com/ra-shree/prequal-server/reverseproxy"
 )
 
@@ -31,7 +32,7 @@ func processMessage(body []byte) {
 		Name                string `json:"name"`
 		Url                 string `json:"url"`
 		Status              string `json:"status"`
-		HealthCheckEndpoint string `json:"healthcheckendpoint"`
+		HealthCheckEndpoint string `json:"health_check_endpoint"`
 	}
 
 	bodyBytes, err := json.Marshal(msg.Body)
@@ -45,6 +46,7 @@ func processMessage(body []byte) {
 
 	switch {
 	case msg.Name == ADD_REPLICA:
+		log.Printf("Adding replica: %v", replica.Url)
 		// err := json.Unmarshal([]byte(msg.Body.(string)), &replica)
 		if err != nil {
 			ReplicaAddFailed(replica.Url)
@@ -57,12 +59,13 @@ func processMessage(body []byte) {
 		ReplicaAdded(replica.Url)
 	case msg.Name == REMOVE_REPLICA:
 		url, err := url.Parse(replica.Url)
-
+		log.Printf("Removing replica: %v", replica.Url)
 		if err != nil {
 			log.Printf("error parsing url for removal in message consumer: %v", err)
 		}
 
 		reverseproxy.Proxy.Replicas[0].RemoveUpstream(url)
+		common.RemoveReplicaKey(replica.Url)
 		ReplicaRemoved(replica.Url)
 	}
 	// log.Print("Received a message \n")

@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var FailedReplica string
+
 // represents a replica of the backend server that requests are forwarded to
 type Replica struct {
 	Router    *mux.Router

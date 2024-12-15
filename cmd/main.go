@@ -81,6 +81,11 @@ func main() {
 		for range periodicProbetime.C {
 			common.PeriodicProbeService(reverseproxy.Proxy.Replicas[0])
 			algorithm.ProbeToReduceLatencyAndQueuingAlgorithm(reverseproxy.Proxy.Replicas[0])
+
+			if common.FailedReplica != "" {
+				messaging.ReplicaFailed(common.FailedReplica)
+				common.FailedReplica = ""
+			}
 		}
 	}()
 

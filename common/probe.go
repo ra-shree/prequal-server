@@ -271,7 +271,13 @@ func PeriodicProbeService(replica *Replica) {
 		newProbe, err := getProbe(replica, perm[i])
 		if err != nil {
 			fmt.Printf("error when getting probe %v\n", err)
+			//publish message
+			// messaging.ReplicaFailed(replica.Upstreams[perm[i]].String())
+
+			// remove replica
 			replica.RemoveUpstream(replica.Upstreams[perm[i]])
+
+			FailedReplica = replica.Upstreams[perm[i]].String()
 
 			continue
 		}

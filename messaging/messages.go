@@ -59,3 +59,12 @@ func ParametersUpdateFailed() {
 
 	PublishMessage(PUBLISHING_QUEUE, &msg)
 }
+
+func ReplicaFailed(url string) {
+	msg := Message{
+		Name: REPLICA_FAILED,
+		Body: url,
+	}
+
+	PublishMessage(PUBLISHING_QUEUE, &msg)
+}
