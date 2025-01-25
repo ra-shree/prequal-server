@@ -15,7 +15,7 @@ type GetPrequalParametersResponse struct {
 
 func GetPrequalParameters() map[string]any {
 	result := make(map[string]any)
-	result["max_life_time"] = 5
+	result["max_life_time"] = 1
 	result["pool_size"] = 16
 	result["probe_factor"] = 1.2
 	result["probe_remove_factor"] = 1

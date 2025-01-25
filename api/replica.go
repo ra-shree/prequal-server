@@ -45,6 +45,5 @@ func GetReplicas() []string {
 			replicaUrls = append(replicaUrls, replica.Url)
 		}
 	}
-
 	return replicaUrls
 }
