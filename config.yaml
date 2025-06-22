@@ -1,0 +1,20 @@
+server:
+  port: 8000
+
+algorithm:
+  type: PREQUAL
+  maxLifeTime: 1
+  poolSize: 10
+  probeFactor: 2
+  probeRemoveFactor: 1
+  mu: 0.5
+
+replicas:
+  -
+    name: Google
+    url: http://localhost:9001
+    healthcheck: ping
+  -
+    name: Oracle
+    url: http://localhost:9002
+    healthcheck: ping

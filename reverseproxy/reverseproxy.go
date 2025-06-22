@@ -19,11 +19,12 @@ import (
 var Proxy *ReverseProxy
 
 type ReverseProxy struct {
-	listeners []Listener
-	Proxy     *httputil.ReverseProxy
-	servers   []*http.Server
-	Replicas  []*common.Replica
-	mutex     sync.RWMutex
+	listeners  []Listener
+	Proxy      *httputil.ReverseProxy
+	servers    []*http.Server
+	Replicas   []*common.Replica
+	mutex      sync.RWMutex
+	ProbeQueue *common.ServerProbeQueue
 }
 
 func (r *ReverseProxy) AddListener(address string) {
@@ -140,7 +141,7 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
-				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing, r.ProbeQueue)
 
 				// log.Printf("Selected upstream: %v\n", upstream.String())
 				common.IncrementSuccessfulRequests(upstream.String())
@@ -199,7 +200,7 @@ func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, e
 			// r.Replicas[0].RemoveUpstream(currentUpstream)
 			fmt.Printf("500 Error detected. Retrying with next upstream...")
 
-			req.URL = r.Replicas[0].SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+			req.URL = r.Replicas[0].SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing, r.ProbeQueue)
 			r.Proxy.ServeHTTP(w, req)
 			if w.Header().Get("X-Success") == "true" {
 				common.IncrementSuccessfulRequests(req.URL.String())

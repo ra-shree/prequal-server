@@ -18,10 +18,10 @@ type Replica struct {
 }
 
 // Any algorithm for selecting an upstream server needs to match this signature
-type SelectionAlgorithm func(*Replica) *url.URL
+type SelectionAlgorithm func(*Replica, *ServerProbeQueue) *url.URL
 
-func (t *Replica) SelectUpstream(upstreamSelector SelectionAlgorithm) *url.URL {
-	upstream := upstreamSelector(t)
+func (t *Replica) SelectUpstream(upstreamSelector SelectionAlgorithm, probeQueue *ServerProbeQueue) *url.URL {
+	upstream := upstreamSelector(t, probeQueue)
 
 	return upstream
 }

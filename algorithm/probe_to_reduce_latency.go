@@ -40,9 +40,9 @@ func EmptyQueue() {
 	UpstreamDecisionQueue = make([]UpstreamDecisionQueueItem, 0, 10)
 }
 
-func ProbeToReduceLatencyAndQueuingAlgorithm(r *common.Replica) {
-	probes := common.ProbeQueue.Probes
-	numberOfProbes := common.ProbeQueue.Size
+func ProbeToReduceLatencyAndQueuingAlgorithm(r *common.Replica, probeQueue *common.ServerProbeQueue) {
+	probes := probeQueue.Probes
+	numberOfProbes := probeQueue.Size
 
 	// for i := 0; i < len(r.Upstreams); i++ {
 	// 	fmt.Printf("\n\nReplica:\t\t%v\n\n", r.Upstreams[i])
@@ -89,8 +89,8 @@ func ProbeToReduceLatencyAndQueuingAlgorithm(r *common.Replica) {
 	Enqueue(probes[minRIFIndex].Upstream)
 }
 
-func ProbingToReduceLatencyAndQueuing(r *common.Replica) *url.URL {
-	ProbeToReduceLatencyAndQueuingAlgorithm(r)
+func ProbingToReduceLatencyAndQueuing(r *common.Replica, probeQueue *common.ServerProbeQueue) *url.URL {
+	ProbeToReduceLatencyAndQueuingAlgorithm(r, probeQueue)
 
 	return DeQueue().destination
 }

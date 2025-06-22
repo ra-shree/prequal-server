@@ -47,7 +47,7 @@ func IncrementSuccessfulRequests(replica string) {
 		}
 	} else {
 		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
-			SuccessfulRequests: 1,
+			SuccessfulRequests: 0,
 			FailedRequests:     0,
 		}
 	}
@@ -64,7 +64,7 @@ func IncrementFailedRequests(replica string) {
 	} else {
 		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
 			SuccessfulRequests: 0,
-			FailedRequests:     1,
+			FailedRequests:     0,
 		}
 	}
 

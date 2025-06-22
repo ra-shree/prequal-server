@@ -48,8 +48,6 @@ var CurrentPrequalParameters PrequalParameters
 // var denom = (1-poolSize/totalReplica)*int(probeFactor) - probeRemoveFactor
 // var reuseRate = max(1, ((1 + mu) / denom))
 
-var ProbeQueue = NewServerProbeQueue()
-
 type ServerProbe struct {
 	Name             string
 	RequestsInFlight int
@@ -95,12 +93,12 @@ func NewServerProbeItem(s *ServerProbe) *ServerProbeItem {
 	}
 }
 
-func NewServerProbeQueue() *ServerProbeQueue {
+func NewServerProbeQueue(capacity int) *ServerProbeQueue {
 	return &ServerProbeQueue{
 		Start:    0,
 		End:      0,
 		Size:     0,
-		Capacity: 16,
+		Capacity: capacity,
 		Probes:   make([]ServerProbeItem, 0, 16),
 	}
 }
@@ -244,7 +242,7 @@ func getProbe(replica *Replica, idx int) (*ServerProbe, error) {
 	return newProbe, nil
 }
 
-func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
+func (q *ServerProbeQueue) ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 	probeRate := randomRound(CurrentPrequalParameters.ProbeFactor)
 
 	numUpstreams := len(replicas[0].Upstreams)
@@ -256,11 +254,11 @@ func ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
 			fmt.Printf("error when getting probe in probe service %v\n", err)
 			continue
 		}
-		ProbeQueue.Add(newProbe)
+		q.Add(newProbe)
 	}
 }
 
-func PeriodicProbeService(replica *Replica) {
+func (q *ServerProbeQueue) PeriodicProbeService(replica *Replica) {
 	// fmt.Printf("\nPeriodic Probe Request: %v\n", t)
 	probeRate := randomRound(CurrentPrequalParameters.ProbeFactor)
 
@@ -281,11 +279,11 @@ func PeriodicProbeService(replica *Replica) {
 
 			continue
 		}
-		ProbeQueue.Add(newProbe)
+		q.Add(newProbe)
 	}
 }
 
-func ProbeCleanService() {
+func (q *ServerProbeQueue) ProbeCleanService() {
 	// fmt.Printf("\nCleaning Probe Queue: %v\n", t)
-	ProbeQueue.RemoveProbes()
+	q.RemoveProbes()
 }
