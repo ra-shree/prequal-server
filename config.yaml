@@ -15,6 +15,14 @@ replicas:
     url: http://localhost:9001
     healthcheck: ping
   -
-    name: Oracle
+    name: Amazon
     url: http://localhost:9002
+    healthcheck: ping
+  -
+    name: Oracle
+    url: http://localhost:9003
+    healthcheck: ping
+  -
+    name: Local
+    url: http://localhost:9004
     healthcheck: ping

@@ -10,23 +10,16 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/algorithm"
 	"github.com/ra-shree/prequal-server/common"
+	"github.com/ra-shree/prequal-server/prequal"
 	"github.com/ra-shree/prequal-server/reverseproxy"
 )
 
 func main() {
 	config := common.LoadConfig("config.yaml")
-
 	fmt.Printf("Parsed Config: %+v\n", config)
 
 	log.Print("Initializing reverse proxy...")
-	probeQueue := common.NewServerProbeQueue(config.Algorithm.PoolSize)
-
-	reverseproxy.Proxy = &reverseproxy.ReverseProxy{
-		ProbeQueue: probeQueue,
-	}
-
 	common.MuxRouter = mux.NewRouter()
 	common.MuxRouter.PathPrefix("/")
 
@@ -53,11 +46,8 @@ func main() {
 		log.Fatal("none of the instances passed healthcheck. Exiting...")
 	}
 
-	reverseproxy.Proxy.AddReplica(replicaList, common.MuxRouter)
-	log.Print("Instances added successfully.")
-
 	log.Print("Configuring algorithm parameters from database...")
-	common.CurrentPrequalParameters = *common.NewPrequalParameters(
+	prequalParameters := *prequal.NewPrequalParameters(
 		config.Algorithm.MaxLifeTime,
 		config.Algorithm.PoolSize,
 		config.Algorithm.ProbeFactor,
@@ -65,14 +55,21 @@ func main() {
 		len(replicaList),
 		int(config.Algorithm.Mu))
 
-	common.InitializeStatistics(replicaList)
+	reverseproxy.Proxy = &reverseproxy.ReverseProxy{
+		ProbeQueue:            prequal.NewServerProbeQueue(config.Algorithm.PoolSize, prequalParameters),
+		ReplicaStatitics:      common.InitializeStatistics(replicaList),
+		UpstreamDecisionQueue: &prequal.UpstreamDecisionQueue{},
+	}
+
+	reverseproxy.Proxy.AddReplica(replicaList, common.MuxRouter)
+	log.Print("Instances added successfully.")
 
 	log.Print("Starting probe service...")
 	periodicProbetime := time.NewTicker(500 * time.Millisecond)
 	go func() {
 		for range periodicProbetime.C {
 			reverseproxy.Proxy.ProbeQueue.PeriodicProbeService(reverseproxy.Proxy.Replicas[0])
-			algorithm.ProbeToReduceLatencyAndQueuingAlgorithm(reverseproxy.Proxy.Replicas[0], reverseproxy.Proxy.ProbeQueue)
+			reverseproxy.Proxy.UpstreamDecisionQueue.ProbeToReduceLatencyAndQueuingAlgorithm(reverseproxy.Proxy.Replicas[0], reverseproxy.Proxy.ProbeQueue)
 		}
 	}()
 
@@ -81,7 +78,7 @@ func main() {
 	go func() {
 		for range probeCleanTimer.C {
 			reverseproxy.Proxy.ProbeQueue.ProbeCleanService()
-			algorithm.EmptyQueue()
+			reverseproxy.Proxy.UpstreamDecisionQueue.EmptyQueue()
 		}
 	}()
 
@@ -93,14 +90,6 @@ func main() {
 			fmt.Printf("\n\nProbe Number %v\t\t", len(reverseproxy.Proxy.ProbeQueue.Probes))
 		}
 	}()
-
-	// log.Print("Start statistics service...")
-	// statisticsTimer := time.NewTicker(10 * time.Second)
-	// go func() {
-	// 	for range statisticsTimer.C {
-	// 		messaging.StatisticsUpdated()
-	// 	}
-	// }()
 
 	log.Print("Starting reverse proxy...")
 

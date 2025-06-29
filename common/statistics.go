@@ -11,58 +11,52 @@ type ReplicaStatisticsParameters struct {
 	FailedRequests     int
 }
 
-var ReplicaStatistics map[string]ReplicaStatisticsParameters
-var lock = sync.RWMutex{}
+type ReplicaStatistics struct {
+	replicaStatistics map[string]ReplicaStatisticsParameters
+	lock              sync.RWMutex
+}
 
-func InitializeStatistics(replicas []string) {
-	lock.Lock()
-	defer lock.Unlock()
-	ReplicaStatistics = make(map[string]ReplicaStatisticsParameters)
+func InitializeStatistics(replicas []string) *ReplicaStatistics {
+	replicaStatisticsMap := make(map[string]ReplicaStatisticsParameters)
 	for _, replica := range replicas {
-		AppendReplicaKey(replica)
+		AppendReplicaKey(replicaStatisticsMap, replica)
+	}
+
+	return &ReplicaStatistics{
+		replicaStatistics: replicaStatisticsMap,
 	}
 }
 
-func AppendReplicaKey(replica string) {
+func AppendReplicaKey(replicaStatisticsMap map[string]ReplicaStatisticsParameters, replica string) {
 	log.Print("Appending new replica to stat: ", replica)
-	ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+	replicaStatisticsMap[replica] = ReplicaStatisticsParameters{
 		SuccessfulRequests: 0,
 		FailedRequests:     0,
 	}
 }
 
-func RemoveReplicaKey(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	delete(ReplicaStatistics, replica)
-}
-
-func IncrementSuccessfulRequests(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	if stats, exists := ReplicaStatistics[replica]; exists {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+func (r *ReplicaStatistics) IncrementSuccessfulRequests(replica string) {
+	if stats, exists := r.replicaStatistics[replica]; exists {
+		r.replicaStatistics[replica] = ReplicaStatisticsParameters{
 			SuccessfulRequests: stats.SuccessfulRequests + 1,
 			FailedRequests:     stats.FailedRequests,
 		}
 	} else {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+		r.replicaStatistics[replica] = ReplicaStatisticsParameters{
 			SuccessfulRequests: 0,
 			FailedRequests:     0,
 		}
 	}
 }
 
-func IncrementFailedRequests(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	if stats, exists := ReplicaStatistics[replica]; exists {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+func (r *ReplicaStatistics) IncrementFailedRequests(replica string) {
+	if stats, exists := r.replicaStatistics[replica]; exists {
+		r.replicaStatistics[replica] = ReplicaStatisticsParameters{
 			SuccessfulRequests: stats.SuccessfulRequests,
 			FailedRequests:     stats.FailedRequests + 1,
 		}
 	} else {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+		r.replicaStatistics[replica] = ReplicaStatisticsParameters{
 			SuccessfulRequests: 0,
 			FailedRequests:     0,
 		}
@@ -75,12 +69,12 @@ type statDataArr struct {
 	Statistics  ReplicaStatisticsParameters `json:"statistics"`
 }
 
-func TransformMapToJson() []statDataArr {
+func (r *ReplicaStatistics) TransformMapToJson() []statDataArr {
 	var jsonArray []statDataArr
 
-	lock.RLock()
-	defer lock.RUnlock()
-	for name, stats := range ReplicaStatistics {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	for name, stats := range r.replicaStatistics {
 		// fmt.Printf("Converting to JSON - Name: %s, Stats: %+v\n", name, stats)
 		jsonArray = append(jsonArray, statDataArr{
 			ReplicaName: name,
@@ -92,17 +86,17 @@ func TransformMapToJson() []statDataArr {
 	return jsonArray
 }
 
-func PrintStatistics() {
-	lock.RLock()
-	defer lock.RUnlock()
+func (r *ReplicaStatistics) PrintStatistics() {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
 
-	if len(ReplicaStatistics) == 0 {
+	if len(r.replicaStatistics) == 0 {
 		log.Println("No statistics data available.")
 		return
 	}
 
 	fmt.Println("Replica Statistics:")
-	for url, stats := range ReplicaStatistics {
+	for url, stats := range r.replicaStatistics {
 		fmt.Printf("URL: %s\n", url)
 		fmt.Printf("  Successful Requests: %d\n", stats.SuccessfulRequests)
 		fmt.Printf("  Failed Requests: %d\n", stats.FailedRequests)

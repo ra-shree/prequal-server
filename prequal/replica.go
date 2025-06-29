@@ -1,4 +1,4 @@
-package common
+package prequal
 
 import (
 	"fmt"
@@ -34,13 +34,6 @@ func (t *Replica) RemoveUpstream(faultyUpstream *url.URL) {
 			t.Upstreams = append(t.Upstreams[:i], t.Upstreams[i+1:]...)
 			fmt.Printf("Removed faulty upstream: %s\n", faultyUpstream.String())
 
-			// sending message to admin server when removing replica``
-			// msg := messaging.Message{
-			// 	Name: messaging.REMOVE_REPLICA,
-			// 	Body: faultyUpstream.String(),
-			// }
-
-			// messaging.PublishMessage(messaging.PUBLISHING_QUEUE, &msg)
 			return
 		}
 	}
