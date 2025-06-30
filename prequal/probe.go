@@ -18,8 +18,8 @@ type PrequalParameters struct {
 
 type ServerProbe struct {
 	Name             string
-	RequestsInFlight int
-	Latency          int
+	RequestsInFlight uint64
+	Latency          uint64
 	Upstream         *url.URL
 	LastTenLatency   []uint64
 }
@@ -46,8 +46,8 @@ func NewPrequalParameters(maxLifeTime int, poolSize int, probeFactor float64, pr
 func NewServerProbe(s *ProbeResponse, u *url.URL) *ServerProbe {
 	return &ServerProbe{
 		Name:             s.ServerName,
-		RequestsInFlight: int(s.RequestsInFlight),
-		Latency:          int(s.Latency),
+		RequestsInFlight: s.RequestsInFlight,
+		Latency:          s.Latency,
 		LastTenLatency:   s.LastTenLatency,
 		Upstream:         u,
 	}

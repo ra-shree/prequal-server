@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,9 +20,18 @@ func main() {
 	config := common.LoadConfig("config.yaml")
 	fmt.Printf("Parsed Config: %+v\n", config)
 
-	log.Print("Initializing reverse proxy...")
+	log.Print("Initializing routes...")
 	common.MuxRouter = mux.NewRouter()
-	common.MuxRouter.PathPrefix("/")
+
+	log.Printf("Register statistics route at /%v ...", config.Server.StatRoute)
+	common.MuxRouter.HandleFunc(fmt.Sprintf("/%v", config.Server.StatRoute), func(w http.ResponseWriter, r *http.Request) {
+		stats := reverseproxy.Proxy.ReplicaStatitics.GetStatistics()
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
 
 	log.Print("Registering server instances...")
 
@@ -55,20 +65,28 @@ func main() {
 		len(replicaList),
 		int(config.Algorithm.Mu))
 
+	log.Print("Initializing the reverse proxy...")
 	reverseproxy.Proxy = &reverseproxy.ReverseProxy{
 		ProbeQueue:            prequal.NewServerProbeQueue(config.Algorithm.PoolSize, prequalParameters),
-		ReplicaStatitics:      common.InitializeStatistics(replicaList),
+		ReplicaStatitics:      common.InitializeStatistics(config.Replicas),
 		UpstreamDecisionQueue: &prequal.UpstreamDecisionQueue{},
 	}
 
+	common.MuxRouter.PathPrefix("/")
 	reverseproxy.Proxy.AddReplica(replicaList, common.MuxRouter)
-	log.Print("Instances added successfully.")
+
+	log.Print("All instances added successfully.")
 
 	log.Print("Starting probe service...")
 	periodicProbetime := time.NewTicker(500 * time.Millisecond)
 	go func() {
 		for range periodicProbetime.C {
-			reverseproxy.Proxy.ProbeQueue.PeriodicProbeService(reverseproxy.Proxy.Replicas[0])
+			newProbes := reverseproxy.Proxy.ProbeQueue.PeriodicProbeService(reverseproxy.Proxy.Replicas[0])
+
+			if newProbes != nil {
+				reverseproxy.Proxy.ReplicaStatitics.UpdateStatistics(newProbes)
+			}
+
 			reverseproxy.Proxy.UpstreamDecisionQueue.ProbeToReduceLatencyAndQueuingAlgorithm(reverseproxy.Proxy.Replicas[0], reverseproxy.Proxy.ProbeQueue)
 		}
 	}()
@@ -81,21 +99,11 @@ func main() {
 			reverseproxy.Proxy.UpstreamDecisionQueue.EmptyQueue()
 		}
 	}()
-
-	// Checks the number of probes currently in queue
-	probeSliceChecker := time.NewTicker(500 * time.Millisecond)
-	go func() {
-		for j := range probeSliceChecker.C {
-			fmt.Print(j)
-			fmt.Printf("\n\nProbe Number %v\t\t", len(reverseproxy.Proxy.ProbeQueue.Probes))
-		}
-	}()
-
 	log.Print("Starting reverse proxy...")
 
 	port := fmt.Sprintf(":%s", strconv.Itoa(config.Server.Port))
 	reverseproxy.Proxy.AddListener(port)
-	if err := reverseproxy.Proxy.Start(reverseproxy.Proxy.ProbeQueue.ProbeService); err != nil {
+	if err := reverseproxy.Proxy.Start(reverseproxy.Proxy.ProbeQueue.ProbeService, config); err != nil {
 		log.Fatal(err)
 	}
 

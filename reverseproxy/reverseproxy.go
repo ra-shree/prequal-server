@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -47,7 +46,7 @@ func (r *ReverseProxy) AddListenerTLS(address, tlsCert, tlsKey string) {
 	r.listeners = append(r.listeners, l)
 }
 
-type service func(http.ResponseWriter, *http.Request, []*prequal.Replica)
+type service func(http.ResponseWriter, *http.Request, []*prequal.Replica) []*common.UpdateStatisticsArg
 
 func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error {
 	var urls = []*url.URL{}
@@ -57,11 +56,6 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 
 		if err != nil {
 			return err
-		}
-
-		if router == nil {
-			router = mux.NewRouter()
-			router.PathPrefix("/")
 		}
 
 		urls = append(urls, url)
@@ -87,7 +81,7 @@ func (r *ReverseProxy) RemoveReplica(upstream string) error {
 	return fmt.Errorf("replica with the specified upstream URL not found")
 }
 
-func (r *ReverseProxy) Start(probeService service) error {
+func (r *ReverseProxy) Start(probeService service, config common.Config) error {
 	r.Proxy = &httputil.ReverseProxy{
 		Director:       r.Director(),
 		ErrorHandler:   r.ErrorHandler(),
@@ -95,7 +89,19 @@ func (r *ReverseProxy) Start(probeService service) error {
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		probeService(w, req, r.Replicas)
+		if req.URL.Path == fmt.Sprintf("/%v", config.Server.StatRoute) {
+			fmt.Println("\nMatched route for path:", req.URL.Path)
+			common.MuxRouter.ServeHTTP(w, req)
+			return
+		}
+
+		fmt.Println("No route matched, proxying request:", req.URL.Path)
+		newProbes := probeService(w, req, r.Replicas)
+
+		if newProbes != nil {
+			r.ReplicaStatitics.UpdateStatistics(newProbes)
+		}
+
 		r.Proxy.ServeHTTP(w, req)
 	})
 
@@ -129,15 +135,6 @@ func (r *ReverseProxy) Start(probeService service) error {
 
 func (r *ReverseProxy) Director() func(req *http.Request) {
 	return func(req *http.Request) {
-		if req.URL.Path == "/admin" || strings.HasPrefix(req.URL.Path, "/admin/") {
-			req.URL.Scheme = "http"
-			req.URL.Host = "localhost:8080"
-
-			if _, ok := req.Header["User-Agent"]; !ok {
-				req.Header.Set("User-Agent", "")
-			}
-			return
-		}
 
 		for _, s := range r.Replicas {
 			match := &mux.RouteMatch{}
@@ -149,7 +146,7 @@ func (r *ReverseProxy) Director() func(req *http.Request) {
 				r.ReplicaStatitics.IncrementSuccessfulRequests(upstream.String())
 
 				// upstream := s.SelectUpstream(algorithm.RoundRobin)
-				fmt.Printf("\nChose upstream %v\n\n", upstream)
+				fmt.Printf("\nChose upstream %v", upstream)
 				req = req.WithContext(context.WithValue(req.Context(), "current_upstream", upstream))
 				targetQuery := upstream.RawQuery
 

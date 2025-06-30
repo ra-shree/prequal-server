@@ -39,7 +39,7 @@ func (q *ServerProbeQueue) Add(probe *ServerProbe) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	fmt.Printf("\n\nAdded a probe, current size %d, capacity %d\n\n", q.Size, q.capacity)
+	fmt.Printf("\nAdded a probe, current size %d, capacity %d", q.Size, q.capacity)
 	if q.Size == q.capacity {
 		// Overwrite the oldest element
 		q.Probes[q.start] = *NewServerProbeItem(probe)
@@ -125,11 +125,13 @@ func (q *ServerProbeQueue) ProbeCleanService() {
 	q.RemoveProbes()
 }
 
-func (q *ServerProbeQueue) ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) {
+func (q *ServerProbeQueue) ProbeService(w http.ResponseWriter, r *http.Request, replicas []*Replica) []*common.UpdateStatisticsArg {
 	probeRate := common.RandomRound(q.prequalParameters.ProbeFactor)
 
 	numUpstreams := len(replicas[0].Upstreams)
 	perm := rand.Perm(numUpstreams)
+
+	latestProbes := make([]*common.UpdateStatisticsArg, 0, len(replicas[0].Upstreams))
 
 	for i := range probeRate {
 		newProbe, err := getProbe(replicas[0], perm[i])
@@ -137,17 +139,29 @@ func (q *ServerProbeQueue) ProbeService(w http.ResponseWriter, r *http.Request, 
 			fmt.Printf("error when getting probe in probe service %v\n", err)
 			continue
 		}
+
+		updateStat := common.NewUpdateStatisticsArg(
+			replicas[0].Upstreams[perm[i]].String(),
+			newProbe.RequestsInFlight,
+			newProbe.Latency,
+			newProbe.LastTenLatency,
+		)
+		latestProbes = append(latestProbes, updateStat)
 		q.Add(newProbe)
 	}
+
+	return latestProbes
 }
 
-func (q *ServerProbeQueue) PeriodicProbeService(replica *Replica) {
+func (q *ServerProbeQueue) PeriodicProbeService(replica *Replica) []*common.UpdateStatisticsArg {
 	probeRate := common.RandomRound(q.prequalParameters.ProbeFactor)
 
 	numUpstreams := len(replica.Upstreams)
 	perm := rand.Perm(numUpstreams)
 
-	for i := 0; i < probeRate; i++ {
+	latestProbes := make([]*common.UpdateStatisticsArg, 0, len(replica.Upstreams))
+
+	for i := range probeRate {
 		newProbe, err := getProbe(replica, perm[i])
 		if err != nil {
 			fmt.Printf("error when getting probe %v\n", err)
@@ -157,6 +171,17 @@ func (q *ServerProbeQueue) PeriodicProbeService(replica *Replica) {
 
 			continue
 		}
+
+		updateStat := common.NewUpdateStatisticsArg(
+			replica.Upstreams[perm[i]].String(),
+			newProbe.RequestsInFlight,
+			newProbe.Latency,
+			newProbe.LastTenLatency,
+		)
+		latestProbes = append(latestProbes, updateStat)
+
 		q.Add(newProbe)
 	}
+
+	return latestProbes
 }
