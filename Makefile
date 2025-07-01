@@ -23,3 +23,16 @@ help:
 .PHONY: run-proxy-server
 run-proxy-server:
 	go run cmd/main.go
+
+r ?= 1000
+c ?= 10
+## run: send large number of requests
+.PHONY: send-load
+send-load:
+	echo "Running ab with r=$(r) and c=$(c)"
+	ab -n $(r) -c $(c) http://localhost:8000/test
+
+## run: show statistics table for instances
+.PHONY: show-stats
+show-stats:
+	go run cmd/stats.go

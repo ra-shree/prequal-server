@@ -95,7 +95,7 @@ func (r *ReverseProxy) Start(probeService service, config common.Config) error {
 			return
 		}
 
-		fmt.Println("No route matched, proxying request:", req.URL.Path)
+		fmt.Println("\nNo route matched, proxying request:", req.URL.Path)
 		newProbes := probeService(w, req, r.Replicas)
 
 		if newProbes != nil {
