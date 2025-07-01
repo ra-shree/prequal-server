@@ -29,6 +29,7 @@ type ReplicaStatisticsParameters struct {
 	RequestsInFlight   uint64   `json:"requests_in_flight"`
 	Latency            uint64   `json:"latency"`
 	LastTenLatency     []uint64 `json:"last_ten_latency"`
+	Status             string   `json:"status"`
 }
 
 type ReplicaStatistics struct {
@@ -53,6 +54,7 @@ func AddKey(replicaStatisticsMap map[string]ReplicaStatisticsParameters, replica
 		SuccessfulRequests: 0,
 		FailedRequests:     0,
 		Name:               replica.Name,
+		Status:             "active",
 	}
 }
 
@@ -68,6 +70,12 @@ func (r *ReplicaStatistics) UpdateStatistics(probes []*UpdateStatisticsArg) {
 
 		r.replicaStatistics[probes[i].Url] = stat
 	}
+}
+
+func (r *ReplicaStatistics) UpdateStatus(replica, status string) {
+	stats := r.replicaStatistics[replica]
+	stats.Status = status
+	r.replicaStatistics[replica] = stats
 }
 
 func (r *ReplicaStatistics) IncrementSuccessfulRequests(replica string) {

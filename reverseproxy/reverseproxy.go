@@ -189,7 +189,7 @@ func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, e
 		}
 
 		r.ReplicaStatitics.IncrementFailedRequests(currentUpstream.String())
-
+		r.ReplicaStatitics.UpdateStatus(currentUpstream.String(), "disabled")
 		if err != nil && err.Error() == "upstream returned 500" {
 			if len(r.Replicas[0].Upstreams) == 1 {
 				http.Error(w, "upstream returned error or all upstreams failed", http.StatusBadGateway)

@@ -26,7 +26,7 @@ func main() {
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{
-		"Name", "Successful", "Failed", "In-Flight", "Latency", "Last 10 Latency",
+		"Name", "Successful", "Failed", "In-Flight", "Latency", "Last 10 Latency", "Status",
 	})
 
 	for _, stat := range stats {
@@ -45,6 +45,7 @@ func main() {
 			strconv.FormatUint(stat.RequestsInFlight, 10),
 			strconv.FormatUint(stat.Latency, 10),
 			lastTen,
+			stat.Status,
 		})
 	}
 
