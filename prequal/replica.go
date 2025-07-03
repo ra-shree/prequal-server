@@ -1,4 +1,4 @@
-package common
+package prequal
 
 import (
 	"fmt"
@@ -18,10 +18,10 @@ type Replica struct {
 }
 
 // Any algorithm for selecting an upstream server needs to match this signature
-type SelectionAlgorithm func(*Replica) *url.URL
+type SelectionAlgorithm func(*Replica, *ServerProbeQueue) *url.URL
 
-func (t *Replica) SelectUpstream(upstreamSelector SelectionAlgorithm) *url.URL {
-	upstream := upstreamSelector(t)
+func (t *Replica) SelectUpstream(upstreamSelector SelectionAlgorithm, probeQueue *ServerProbeQueue) *url.URL {
+	upstream := upstreamSelector(t, probeQueue)
 
 	return upstream
 }
@@ -34,13 +34,6 @@ func (t *Replica) RemoveUpstream(faultyUpstream *url.URL) {
 			t.Upstreams = append(t.Upstreams[:i], t.Upstreams[i+1:]...)
 			fmt.Printf("Removed faulty upstream: %s\n", faultyUpstream.String())
 
-			// sending message to admin server when removing replica``
-			// msg := messaging.Message{
-			// 	Name: messaging.REMOVE_REPLICA,
-			// 	Body: faultyUpstream.String(),
-			// }
-
-			// messaging.PublishMessage(messaging.PUBLISHING_QUEUE, &msg)
 			return
 		}
 	}

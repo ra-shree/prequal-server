@@ -8,22 +8,24 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/mux"
-	"github.com/ra-shree/prequal-server/algorithm"
 	"github.com/ra-shree/prequal-server/common"
+	"github.com/ra-shree/prequal-server/prequal"
 )
 
 var Proxy *ReverseProxy
 
 type ReverseProxy struct {
-	listeners []Listener
-	Proxy     *httputil.ReverseProxy
-	servers   []*http.Server
-	Replicas  []*common.Replica
-	mutex     sync.RWMutex
+	listeners             []Listener
+	Proxy                 *httputil.ReverseProxy
+	servers               []*http.Server
+	Replicas              []*prequal.Replica
+	mutex                 sync.RWMutex
+	ProbeQueue            *prequal.ServerProbeQueue
+	ReplicaStatitics      *common.ReplicaStatistics
+	UpstreamDecisionQueue *prequal.UpstreamDecisionQueue
 }
 
 func (r *ReverseProxy) AddListener(address string) {
@@ -44,7 +46,7 @@ func (r *ReverseProxy) AddListenerTLS(address, tlsCert, tlsKey string) {
 	r.listeners = append(r.listeners, l)
 }
 
-type service func(http.ResponseWriter, *http.Request, []*common.Replica)
+type service func(http.ResponseWriter, *http.Request, []*prequal.Replica) []*common.UpdateStatisticsArg
 
 func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error {
 	var urls = []*url.URL{}
@@ -56,15 +58,10 @@ func (r *ReverseProxy) AddReplica(upstreams []string, router *mux.Router) error 
 			return err
 		}
 
-		if router == nil {
-			router = mux.NewRouter()
-			router.PathPrefix("/")
-		}
-
 		urls = append(urls, url)
 	}
 
-	r.Replicas = append(r.Replicas, &common.Replica{
+	r.Replicas = append(r.Replicas, &prequal.Replica{
 		Router:    router,
 		Upstreams: urls,
 	})
@@ -84,7 +81,7 @@ func (r *ReverseProxy) RemoveReplica(upstream string) error {
 	return fmt.Errorf("replica with the specified upstream URL not found")
 }
 
-func (r *ReverseProxy) Start(probeService service) error {
+func (r *ReverseProxy) Start(probeService service, config common.Config) error {
 	r.Proxy = &httputil.ReverseProxy{
 		Director:       r.Director(),
 		ErrorHandler:   r.ErrorHandler(),
@@ -92,7 +89,19 @@ func (r *ReverseProxy) Start(probeService service) error {
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		probeService(w, req, r.Replicas)
+		if req.URL.Path == fmt.Sprintf("/%v", config.Server.StatRoute) {
+			fmt.Println("\nMatched route for path:", req.URL.Path)
+			common.MuxRouter.ServeHTTP(w, req)
+			return
+		}
+
+		fmt.Println("\nNo route matched, proxying request:", req.URL.Path)
+		newProbes := probeService(w, req, r.Replicas)
+
+		if newProbes != nil {
+			r.ReplicaStatitics.UpdateStatistics(newProbes)
+		}
+
 		r.Proxy.ServeHTTP(w, req)
 	})
 
@@ -126,27 +135,18 @@ func (r *ReverseProxy) Start(probeService service) error {
 
 func (r *ReverseProxy) Director() func(req *http.Request) {
 	return func(req *http.Request) {
-		if req.URL.Path == "/admin" || strings.HasPrefix(req.URL.Path, "/admin/") {
-			req.URL.Scheme = "http"
-			req.URL.Host = "localhost:8080"
-
-			if _, ok := req.Header["User-Agent"]; !ok {
-				req.Header.Set("User-Agent", "")
-			}
-			return
-		}
 
 		for _, s := range r.Replicas {
 			match := &mux.RouteMatch{}
 
 			if s.Router.Match(req, match) {
-				upstream := s.SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+				upstream := s.SelectUpstream(r.UpstreamDecisionQueue.ProbingToReduceLatencyAndQueuing, r.ProbeQueue)
 
 				// log.Printf("Selected upstream: %v\n", upstream.String())
-				common.IncrementSuccessfulRequests(upstream.String())
+				r.ReplicaStatitics.IncrementSuccessfulRequests(upstream.String())
 
 				// upstream := s.SelectUpstream(algorithm.RoundRobin)
-				fmt.Printf("\nChose upstream %v\n\n", upstream)
+				fmt.Printf("\nChose upstream %v", upstream)
 				req = req.WithContext(context.WithValue(req.Context(), "current_upstream", upstream))
 				targetQuery := upstream.RawQuery
 
@@ -188,8 +188,8 @@ func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, e
 			return
 		}
 
-		common.IncrementFailedRequests(currentUpstream.String())
-
+		r.ReplicaStatitics.IncrementFailedRequests(currentUpstream.String())
+		r.ReplicaStatitics.UpdateStatus(currentUpstream.String(), "disabled")
 		if err != nil && err.Error() == "upstream returned 500" {
 			if len(r.Replicas[0].Upstreams) == 1 {
 				http.Error(w, "upstream returned error or all upstreams failed", http.StatusBadGateway)
@@ -199,10 +199,10 @@ func (r *ReverseProxy) ErrorHandler() func(http.ResponseWriter, *http.Request, e
 			// r.Replicas[0].RemoveUpstream(currentUpstream)
 			fmt.Printf("500 Error detected. Retrying with next upstream...")
 
-			req.URL = r.Replicas[0].SelectUpstream(algorithm.ProbingToReduceLatencyAndQueuing)
+			req.URL = r.Replicas[0].SelectUpstream(r.UpstreamDecisionQueue.ProbingToReduceLatencyAndQueuing, r.ProbeQueue)
 			r.Proxy.ServeHTTP(w, req)
 			if w.Header().Get("X-Success") == "true" {
-				common.IncrementSuccessfulRequests(req.URL.String())
+				r.ReplicaStatitics.IncrementSuccessfulRequests(req.URL.String())
 				return
 			}
 		}

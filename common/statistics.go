@@ -6,106 +6,122 @@ import (
 	"sync"
 )
 
-type ReplicaStatisticsParameters struct {
-	SuccessfulRequests int
-	FailedRequests     int
+type UpdateStatisticsArg struct {
+	Url              string
+	RequestsInFlight uint64
+	Latency          uint64
+	LastTenLatency   []uint64
 }
 
-var ReplicaStatistics map[string]ReplicaStatisticsParameters
-var lock = sync.RWMutex{}
-
-func InitializeStatistics(replicas []string) {
-	lock.Lock()
-	defer lock.Unlock()
-	ReplicaStatistics = make(map[string]ReplicaStatisticsParameters)
-	for _, replica := range replicas {
-		AppendReplicaKey(replica)
+func NewUpdateStatisticsArg(url string, requestsInFlight, latency uint64, lastTenLatency []uint64) *UpdateStatisticsArg {
+	return &UpdateStatisticsArg{
+		Url:              url,
+		RequestsInFlight: requestsInFlight,
+		Latency:          latency,
+		LastTenLatency:   lastTenLatency,
 	}
 }
 
-func AppendReplicaKey(replica string) {
+type ReplicaStatisticsParameters struct {
+	Name               string   `json:"name"`
+	SuccessfulRequests int      `json:"successful_requests"`
+	FailedRequests     int      `json:"failed_requests"`
+	RequestsInFlight   uint64   `json:"requests_in_flight"`
+	Latency            uint64   `json:"latency"`
+	LastTenLatency     []uint64 `json:"last_ten_latency"`
+	Status             string   `json:"status"`
+}
+
+type ReplicaStatistics struct {
+	replicaStatistics map[string]ReplicaStatisticsParameters
+	lock              sync.RWMutex
+}
+
+func InitializeStatistics(replicas []ReplicaConfig) *ReplicaStatistics {
+	replicaStatisticsMap := make(map[string]ReplicaStatisticsParameters)
+	for _, replica := range replicas {
+		AddKey(replicaStatisticsMap, replica)
+	}
+
+	return &ReplicaStatistics{
+		replicaStatistics: replicaStatisticsMap,
+	}
+}
+
+func AddKey(replicaStatisticsMap map[string]ReplicaStatisticsParameters, replica ReplicaConfig) {
 	log.Print("Appending new replica to stat: ", replica)
-	ReplicaStatistics[replica] = ReplicaStatisticsParameters{
+	replicaStatisticsMap[replica.URL] = ReplicaStatisticsParameters{
 		SuccessfulRequests: 0,
 		FailedRequests:     0,
+		Name:               replica.Name,
+		Status:             "active",
 	}
 }
 
-func RemoveReplicaKey(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	delete(ReplicaStatistics, replica)
-}
+func (r *ReplicaStatistics) UpdateStatistics(probes []*UpdateStatisticsArg) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
-func IncrementSuccessfulRequests(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	if stats, exists := ReplicaStatistics[replica]; exists {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
-			SuccessfulRequests: stats.SuccessfulRequests + 1,
-			FailedRequests:     stats.FailedRequests,
-		}
-	} else {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
-			SuccessfulRequests: 1,
-			FailedRequests:     0,
-		}
+	for i := range probes {
+		stat := r.replicaStatistics[probes[i].Url]
+		stat.Latency = probes[i].Latency
+		stat.LastTenLatency = probes[i].LastTenLatency
+		stat.RequestsInFlight = probes[i].RequestsInFlight
+
+		r.replicaStatistics[probes[i].Url] = stat
 	}
 }
 
-func IncrementFailedRequests(replica string) {
-	lock.Lock()
-	defer lock.Unlock()
-	if stats, exists := ReplicaStatistics[replica]; exists {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
-			SuccessfulRequests: stats.SuccessfulRequests,
-			FailedRequests:     stats.FailedRequests + 1,
-		}
-	} else {
-		ReplicaStatistics[replica] = ReplicaStatisticsParameters{
-			SuccessfulRequests: 0,
-			FailedRequests:     1,
-		}
+func (r *ReplicaStatistics) UpdateStatus(replica, status string) {
+	stats := r.replicaStatistics[replica]
+	stats.Status = status
+	r.replicaStatistics[replica] = stats
+}
+
+func (r *ReplicaStatistics) IncrementSuccessfulRequests(replica string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if stats, exists := r.replicaStatistics[replica]; exists {
+		stats.SuccessfulRequests += 1
+		r.replicaStatistics[replica] = stats
 	}
-
 }
 
-type statDataArr struct {
-	ReplicaName string                      `json:"replica_name"`
-	Statistics  ReplicaStatisticsParameters `json:"statistics"`
-}
+func (r *ReplicaStatistics) IncrementFailedRequests(replica string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
-func TransformMapToJson() []statDataArr {
-	var jsonArray []statDataArr
-
-	lock.RLock()
-	defer lock.RUnlock()
-	for name, stats := range ReplicaStatistics {
-		// fmt.Printf("Converting to JSON - Name: %s, Stats: %+v\n", name, stats)
-		jsonArray = append(jsonArray, statDataArr{
-			ReplicaName: name,
-			Statistics:  stats,
-		})
+	if stats, exists := r.replicaStatistics[replica]; exists {
+		stats.FailedRequests += 1
+		r.replicaStatistics[replica] = stats
 	}
-	// fmt.Printf("Final JSON Array: %+v\n", jsonArray)
-
-	return jsonArray
 }
 
-func PrintStatistics() {
-	lock.RLock()
-	defer lock.RUnlock()
+func (r *ReplicaStatistics) PrintStatistics() {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
 
-	if len(ReplicaStatistics) == 0 {
+	if len(r.replicaStatistics) == 0 {
 		log.Println("No statistics data available.")
 		return
 	}
 
 	fmt.Println("Replica Statistics:")
-	for url, stats := range ReplicaStatistics {
-		fmt.Printf("URL: %s\n", url)
-		fmt.Printf("  Successful Requests: %d\n", stats.SuccessfulRequests)
-		fmt.Printf("  Failed Requests: %d\n", stats.FailedRequests)
-		fmt.Println("---")
+	for url, stats := range r.replicaStatistics {
+		fmt.Printf("URL: %s, STATS: %+v\n", url, stats)
 	}
+}
+
+func (r *ReplicaStatistics) GetStatistics() []ReplicaStatisticsParameters {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	statistics := make([]ReplicaStatisticsParameters, 0, len(r.replicaStatistics))
+
+	for _, value := range r.replicaStatistics {
+		statistics = append(statistics, value)
+	}
+
+	return statistics
 }
